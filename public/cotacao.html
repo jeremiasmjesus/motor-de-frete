@@ -110,7 +110,11 @@
             (r) => `
           <tr>
             <td>${r.carrierName}</td>
-            <td>${r.priceCents === 0 ? '<span class="status ok">grátis</span>' : money(r.priceCents)}</td>
+            <td>${
+              r.priceCents === 0
+                ? `<span class="status ok">grátis</span>${r.originalPriceCents ? ` <span style="color:var(--ink-faint);font-size:12px">(cliente pagaria ${money(r.originalPriceCents)})</span>` : ""}`
+                : money(r.priceCents)
+            }</td>
             <td>${r.deadlineDays} dia(s) útil(eis)</td>
           </tr>`,
           )

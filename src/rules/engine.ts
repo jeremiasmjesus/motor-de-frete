@@ -44,8 +44,6 @@ function applyAction(quote: BaseQuote, rule: Rule): BaseQuote {
         ...quote,
         priceCents: Math.round(quote.priceCents * (1 + (a.percentual ?? 0) / 100)),
       };
-    case "frete_gratis":
-      return { ...quote, priceCents: 0 };
     case "acrescimo_prazo":
       return { ...quote, deadlineDays: quote.deadlineDays + (a.additionalDays ?? 0) };
     default:
@@ -54,10 +52,11 @@ function applyAction(quote: BaseQuote, rule: Rule): BaseQuote {
 }
 
 /**
- * Aplica as regras ativas, em ordem de prioridade (menor primeiro), sobre a cotação base.
- * Regras de prioridade mais alta (ex: frete grátis condicional) tendem a rodar por último
- * e podem sobrescrever o resultado das anteriores — mesmo comportamento observado no
- * modelo de "ordem de execução" do Frete Barato.
+ * Aplica as regras de valor/prazo (tudo exceto frete grátis), em ordem de prioridade,
+ * sobre a cotação de UMA transportadora. Frete grátis é tratado à parte por
+ * `applyFreeShipping`, porque a regra é "a mais barata elegível fica grátis, as
+ * outras continuam pagas" — não dá pra decidir isso olhando uma transportadora
+ * de cada vez.
  */
 export function applyRules(
   base: BaseQuote,
@@ -66,8 +65,32 @@ export function applyRules(
   now: Date = new Date(),
 ): BaseQuote {
   const applicable = rules
-    .filter((r) => r.active && conditionMatches(r, base.carrierCode, ctx, now))
+    .filter((r) => r.active && r.type !== "frete_gratis" && conditionMatches(r, base.carrierCode, ctx, now))
     .sort((a, b) => a.priority - b.priority);
 
   return applicable.reduce(applyAction, base);
+}
+
+/**
+ * Entre as transportadoras elegíveis pra alguma regra de frete grátis ativa,
+ * zera o preço só da mais barata — as demais continuam com o preço calculado,
+ * disponíveis pra quem quiser pagar por uma opção mais rápida.
+ */
+export function applyFreeShipping(
+  quotes: BaseQuote[],
+  rules: Rule[],
+  ctx: QuoteContext,
+  now: Date = new Date(),
+): BaseQuote[] {
+  const freeRules = rules.filter((r) => r.active && r.type === "frete_gratis");
+  if (freeRules.length === 0) return quotes;
+
+  const eligible = quotes.filter((q) => freeRules.some((r) => conditionMatches(r, q.carrierCode, ctx, now)));
+  if (eligible.length === 0) return quotes;
+
+  const cheapest = eligible.reduce((min, q) => (q.priceCents < min.priceCents ? q : min));
+
+  return quotes.map((q) =>
+    q === cheapest ? { ...q, priceCents: 0, originalPriceCents: cheapest.priceCents } : q,
+  );
 }

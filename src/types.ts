@@ -23,6 +23,8 @@ export interface BaseQuote {
   carrierName: string;
   priceCents: number;
   deadlineDays: number;
+  /** Preenchido só quando o frete grátis zerou o preço — quanto o cliente pagaria sem a regra. */
+  originalPriceCents?: number;
 }
 
 export type RuleType =

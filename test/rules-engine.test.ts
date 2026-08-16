@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyRules } from "../src/rules/engine.js";
+import { applyFreeShipping, applyRules } from "../src/rules/engine.js";
 import type { BaseQuote, Rule } from "../src/types.js";
 
 const base: BaseQuote = {
   carrierCode: "correios",
-  carrierName: "Correios",
+  carrierName: "Sedex",
   priceCents: 2490,
   deadlineDays: 3,
 };
@@ -46,61 +46,13 @@ describe("applyRules", () => {
     expect(applyRules(base, rules, ctx).priceCents).toBe(2789); // 2490 * 1.12 arredondado
   });
 
-  it("frete grátis condicional zera o preço quando o valor final do carrinho bate", () => {
-    const rules = [
-      rule({ type: "percentual", priority: 0, action: { percentual: 10 } }),
-      rule({
-        type: "frete_gratis",
-        priority: 99,
-        condition: { cartValueMinCents: 30000, geoMode: "estado", ufs: ["SP", "RJ"] },
-        action: {},
-      }),
-    ];
-    expect(applyRules(base, rules, ctx).priceCents).toBe(0);
-  });
-
-  it("não aplica frete grátis se o valor do carrinho não atinge o mínimo", () => {
-    const rules = [
-      rule({
-        type: "frete_gratis",
-        priority: 99,
-        condition: { cartValueMinCents: 100000 },
-        action: {},
-      }),
-    ];
-    expect(applyRules(base, rules, { ...ctx, cartValueCents: 5000 }).priceCents).toBe(base.priceCents);
-  });
-
-  it("condição por região bate quando a UF pertence à região selecionada", () => {
-    const rules = [
-      rule({ type: "frete_gratis", condition: { geoMode: "regiao", regioes: ["Sudeste"] } }),
-    ];
-    expect(applyRules(base, rules, { ...ctx, destinationUf: "MG" }).priceCents).toBe(0);
-  });
-
-  it("condição por região não bate fora da região selecionada", () => {
-    const rules = [
-      rule({ type: "frete_gratis", condition: { geoMode: "regiao", regioes: ["Sul"] } }),
-    ];
-    expect(applyRules(base, rules, { ...ctx, destinationUf: "SP" }).priceCents).toBe(base.priceCents);
-  });
-
-  it("condição por faixa de CEP bate quando o CEP de destino está dentro da faixa", () => {
-    const rules = [
-      rule({ type: "frete_gratis", condition: { geoMode: "cep", cepFrom: "01000000", cepTo: "01999999" } }),
-    ];
-    expect(applyRules(base, rules, ctx).priceCents).toBe(0);
-  });
-
-  it("condição por faixa de CEP não bate fora da faixa", () => {
-    const rules = [
-      rule({ type: "frete_gratis", condition: { geoMode: "cep", cepFrom: "02000000", cepTo: "02999999" } }),
-    ];
+  it("não mexe no preço por causa de regra de frete grátis — isso é responsabilidade do applyFreeShipping", () => {
+    const rules = [rule({ type: "frete_gratis", condition: { cartValueMinCents: 30000 } })];
     expect(applyRules(base, rules, ctx).priceCents).toBe(base.priceCents);
   });
 
   it("ignora regra inativa", () => {
-    const rules = [rule({ active: false, type: "frete_gratis" })];
+    const rules = [rule({ active: false, type: "valor_fixo", action: { fixedPriceCents: 1 } })];
     expect(applyRules(base, rules, ctx).priceCents).toBe(base.priceCents);
   });
 
@@ -121,5 +73,53 @@ describe("applyRules", () => {
     const result = applyRules(base, rules, ctx);
     expect(result.deadlineDays).toBe(5);
     expect(result.priceCents).toBe(base.priceCents);
+  });
+});
+
+describe("applyFreeShipping", () => {
+  const quotes: BaseQuote[] = [
+    { carrierCode: "correios", carrierName: "Sedex", priceCents: 5629, deadlineDays: 3 },
+    { carrierCode: "loggi", carrierName: "Loggi", priceCents: 2349, deadlineDays: 4 },
+    { carrierCode: "jt-express", carrierName: "J&T Express", priceCents: 1644, deadlineDays: 4 },
+  ];
+
+  it("zera só a mais barata elegível, mantém as outras pagas", () => {
+    const rules = [rule({ type: "frete_gratis", condition: { cartValueMinCents: 30000 } })];
+    const result = applyFreeShipping(quotes, rules, ctx);
+
+    const jt = result.find((q) => q.carrierCode === "jt-express")!;
+    const loggi = result.find((q) => q.carrierCode === "loggi")!;
+    const sedex = result.find((q) => q.carrierCode === "correios")!;
+
+    expect(jt.priceCents).toBe(0);
+    expect(jt.originalPriceCents).toBe(1644);
+    expect(loggi.priceCents).toBe(2349);
+    expect(sedex.priceCents).toBe(5629);
+  });
+
+  it("sem condição batendo, nenhuma fica grátis", () => {
+    const rules = [rule({ type: "frete_gratis", condition: { cartValueMinCents: 100000 } })];
+    const result = applyFreeShipping(quotes, rules, { ...ctx, cartValueCents: 5000 });
+    expect(result).toEqual(quotes);
+  });
+
+  it("regra restrita a uma transportadora só considera essa transportadora, mesmo não sendo a mais barata geral", () => {
+    const rules = [rule({ type: "frete_gratis", carrierCode: "correios", condition: {} })];
+    const result = applyFreeShipping(quotes, rules, ctx);
+
+    expect(result.find((q) => q.carrierCode === "correios")!.priceCents).toBe(0);
+    expect(result.find((q) => q.carrierCode === "loggi")!.priceCents).toBe(2349);
+    expect(result.find((q) => q.carrierCode === "jt-express")!.priceCents).toBe(1644);
+  });
+
+  it("condição por região só torna elegíveis os destinos daquela região", () => {
+    const rules = [rule({ type: "frete_gratis", condition: { geoMode: "regiao", regioes: ["Sul"] } })];
+    const result = applyFreeShipping(quotes, rules, { ...ctx, destinationUf: "SP" });
+    expect(result).toEqual(quotes); // SP não é Sul, ninguém fica grátis
+  });
+
+  it("ignora regra inativa", () => {
+    const rules = [rule({ type: "frete_gratis", active: false, condition: {} })];
+    expect(applyFreeShipping(quotes, rules, ctx)).toEqual(quotes);
   });
 });

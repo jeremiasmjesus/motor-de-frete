@@ -40,6 +40,8 @@ export default async function quoteRoutes(app: FastifyInstance) {
       name: r.carrierName,
       code: r.carrierCode,
       price: r.priceCents / 100,
+      // quanto custaria sem o frete grátis — a Nuvemshop usa isso pra saber o custo real da loja
+      ...(r.originalPriceCents !== undefined ? { price_merchant: r.originalPriceCents / 100 } : {}),
       currency: body.currency,
       type: "ship",
       min_delivery_date: toIsoDeadline(r.deadlineDays),

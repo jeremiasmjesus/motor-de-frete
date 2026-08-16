@@ -20,7 +20,7 @@ export interface Db {
 }
 
 const databaseUrl = process.env.DATABASE_URL;
-const usePglite = !databaseUrl || databaseUrl.startsWith("pglite:");
+export const usePglite = !databaseUrl || databaseUrl.startsWith("pglite:");
 
 function createPgPool(url: string): Db {
   const pool = new Pool({ connectionString: url });

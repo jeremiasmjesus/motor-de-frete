@@ -12,7 +12,7 @@ import adminCorreiosRoutes from "./routes/admin-correios.js";
 import adminTableRoutes from "./routes/admin-tables.js";
 import adminRulesRoutes from "./routes/admin-rules.js";
 import adminQuoteRoutes from "./routes/admin-quote.js";
-import { pool } from "./db/client.js";
+import { pool, usePglite } from "./db/client.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -36,14 +36,10 @@ await app.register(fastifyStatic, {
 app.get("/health", async () => ({ ok: true }));
 app.get("/", async (_request, reply) => reply.redirect("/painel/login.html"));
 
-const port = Number(process.env.PORT ?? 3000);
-app.listen({ port, host: "0.0.0.0" }).catch((err) => {
-  app.log.error(err);
-  process.exit(1);
-});
-
 // Encerramento limpo é obrigatório com o PGlite embarcado — matar o processo
-// sem fechar o banco corrompe os arquivos de dados locais.
+// sem fechar o banco corrompe os arquivos de dados locais. No Windows o Node
+// não recebe SIGTERM de forma confiável, então em dev (PGlite) também
+// expomos um jeito de pedir o desligamento por HTTP.
 async function shutdown() {
   await app.close();
   await pool.end();
@@ -51,3 +47,16 @@ async function shutdown() {
 }
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+if (usePglite) {
+  app.post("/admin/dev-shutdown", { preHandler: app.requireRole("admin") }, async (_request, reply) => {
+    reply.send({ ok: true });
+    setImmediate(shutdown);
+  });
+}
+
+const port = Number(process.env.PORT ?? 3000);
+app.listen({ port, host: "0.0.0.0" }).catch((err) => {
+  app.log.error(err);
+  process.exit(1);
+});

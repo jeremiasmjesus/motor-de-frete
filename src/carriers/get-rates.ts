@@ -3,8 +3,8 @@ import { listActiveRules } from "../db/rules.js";
 import { getCorreiosQuote } from "./correios/client.js";
 import { getFlatTableQuote, getZoneTableQuote } from "./table/lookup.js";
 import { cepToUf } from "./cep.js";
-import { applyRules } from "../rules/engine.js";
-import type { BaseQuote } from "../types.js";
+import { applyFreeShipping, applyRules } from "../rules/engine.js";
+import type { BaseQuote, QuoteContext } from "../types.js";
 
 export interface RateRequest {
   originCep: string;
@@ -23,6 +23,12 @@ export interface RateRequest {
 export async function getRates(req: RateRequest): Promise<BaseQuote[]> {
   const destinationUf = cepToUf(req.destinationCep);
   const [carriers, rules] = await Promise.all([listActiveCarriers(), listActiveRules()]);
+
+  const ctx: QuoteContext = {
+    cartValueCents: req.cartValueCents,
+    destinationUf: destinationUf ?? "",
+    destinationCep: req.destinationCep,
+  };
 
   const results: BaseQuote[] = [];
 
@@ -64,14 +70,9 @@ export async function getRates(req: RateRequest): Promise<BaseQuote[]> {
 
     if (!base) continue;
 
-    const adjusted = applyRules(base, rules, {
-      cartValueCents: req.cartValueCents,
-      destinationUf: destinationUf ?? "",
-      destinationCep: req.destinationCep,
-    });
-
-    results.push(adjusted);
+    results.push(applyRules(base, rules, ctx));
   }
 
-  return results.sort((a, b) => a.priceCents - b.priceCents);
+  const withFreeShipping = applyFreeShipping(results, rules, ctx);
+  return withFreeShipping.sort((a, b) => a.priceCents - b.priceCents);
 }
