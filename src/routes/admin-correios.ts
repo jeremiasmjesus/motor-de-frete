@@ -5,8 +5,8 @@ import { invalidateCorreiosTokenCache, testCorreiosCredentials } from "../carrie
 import type { AuthUser } from "../types.js";
 
 const credentialsBody = z.object({
-  user: z.string().min(1, "informe o usuário do Meu Correios"),
-  password: z.string().min(1, "informe a senha"),
+  user: z.string().min(1, "informe o usuário (geralmente o CNPJ cadastrado no CWS)"),
+  codigoAcesso: z.string().min(1, "informe o código de acesso gerado no CWS"),
   cartaoPostagem: z.string().min(1, "informe o número do cartão de postagem"),
 });
 

@@ -26,7 +26,7 @@ async function fetchToken(): Promise<string> {
     throw new Error("Credenciais dos Correios não configuradas. Cadastre-as no painel antes de cotar.");
   }
 
-  const basic = Buffer.from(`${creds.user}:${creds.password}`).toString("base64");
+  const basic = Buffer.from(`${creds.user}:${creds.codigoAcesso}`).toString("base64");
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",

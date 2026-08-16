@@ -9,22 +9,25 @@
 <body>
   <main>
     <h1>Credenciais dos Correios</h1>
-    <p class="lede">Essas são as mesmas credenciais do Meu Correios / CWS que vocês já usam hoje — usuário, senha e número do cartão de postagem. Atualize aqui sempre que precisar trocar, sem depender de deploy.</p>
+    <p class="lede">Não é a senha do Meu Correios — é o <strong>Código de Acesso</strong> gerado no CWS especificamente pra API, o mesmo que vocês já usam no Frete Barato. Atualize aqui sempre que precisar trocar, sem depender de deploy.</p>
 
     <div class="card">
       <h2>Status atual</h2>
-      <p class="hint">O que está salvo agora (a senha nunca é exibida de volta).</p>
+      <p class="hint">O que está salvo agora (o código de acesso nunca é exibido de volta).</p>
       <div id="status-box">Carregando…</div>
     </div>
 
     <div class="card">
       <h2>Atualizar credenciais</h2>
-      <p class="hint">Salvar aqui não testa a conexão automaticamente — use o teste abaixo depois de salvar.</p>
+      <p class="hint" style="background:var(--surface-2);padding:10px 12px;border-radius:8px;color:var(--ink)">
+        Precisa gerar ou já tem o código? Acesse <strong>cws.correios.com.br</strong> → <strong>Gestão de acesso à API</strong> → informe sua senha do Meu Correios e clique em <strong>Gerar código</strong> (ou <strong>Regerar código</strong> se já existir um).
+      </p>
       <form id="creds-form">
-        <label for="user">Usuário (Meu Correios)</label>
+        <label for="user">Usuário</label>
+        <p class="hint" style="margin-top:-8px">Geralmente o CNPJ cadastrado no CWS — ex: <code>45151009000131</code></p>
         <input type="text" id="user" required />
-        <label for="password">Senha</label>
-        <input type="password" id="password" required autocomplete="new-password" />
+        <label for="codigo-acesso">Código de Acesso</label>
+        <input type="text" id="codigo-acesso" required autocomplete="off" spellcheck="false" />
         <label for="cartao">Cartão de postagem</label>
         <input type="text" id="cartao" required />
         <button class="primary" type="submit">Salvar credenciais</button>
@@ -95,7 +98,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             user: document.getElementById("user").value,
-            password: document.getElementById("password").value,
+            codigoAcesso: document.getElementById("codigo-acesso").value,
             cartaoPostagem: document.getElementById("cartao").value,
           }),
         });

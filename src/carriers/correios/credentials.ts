@@ -3,7 +3,8 @@ import { decryptJson, encryptJson } from "../../security/crypto.js";
 
 export interface CorreiosCredentials {
   user: string;
-  password: string;
+  /** Código de Acesso gerado no CWS (Gestão de acesso à API) — não é a senha do Meu Correios. */
+  codigoAcesso: string;
   cartaoPostagem: string;
 }
 
