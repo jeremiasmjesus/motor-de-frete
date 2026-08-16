@@ -31,6 +31,7 @@ export type RuleType =
   | "valor_fixo"
   | "valor_fixo_adicional"
   | "percentual"
+  | "percentual_valor_declarado"
   | "frete_gratis"
   | "acrescimo_prazo";
 
@@ -50,6 +51,8 @@ export interface RuleAction {
   fixedPriceCents?: number;
   additionalPriceCents?: number;
   percentual?: number;
+  /** Usado por percentual_valor_declarado — incide sobre o valor do pedido (Gris, Ad Valorem), não sobre o frete. */
+  percentualValorDeclarado?: number;
   additionalDays?: number;
 }
 

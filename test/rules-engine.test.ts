@@ -46,6 +46,21 @@ describe("applyRules", () => {
     expect(applyRules(base, rules, ctx).priceCents).toBe(2789); // 2490 * 1.12 arredondado
   });
 
+  it("percentual_valor_declarado incide sobre o valor do pedido, não sobre o frete (Gris/Ad Valorem)", () => {
+    const rules = [rule({ type: "percentual_valor_declarado", action: { percentualValorDeclarado: 0.4 } })];
+    // ctx.cartValueCents = 35000 (R$350) * 0.4% = 140 centavos, somados ao frete de 2490
+    expect(applyRules(base, rules, ctx).priceCents).toBe(2630);
+  });
+
+  it("duas regras de valor declarado somam (Gris + Ad Valorem)", () => {
+    const rules = [
+      rule({ type: "percentual_valor_declarado", action: { percentualValorDeclarado: 0.4 }, priority: 0 }),
+      rule({ type: "percentual_valor_declarado", action: { percentualValorDeclarado: 0.2 }, priority: 1 }),
+    ];
+    // 35000 * 0.4% = 140, 35000 * 0.2% = 70 -> 2490 + 140 + 70 = 2700
+    expect(applyRules(base, rules, ctx).priceCents).toBe(2700);
+  });
+
   it("não mexe no preço por causa de regra de frete grátis — isso é responsabilidade do applyFreeShipping", () => {
     const rules = [rule({ type: "frete_gratis", condition: { cartValueMinCents: 30000 } })];
     expect(applyRules(base, rules, ctx).priceCents).toBe(base.priceCents);

@@ -60,7 +60,8 @@
           <option value="frete_gratis">Frete grátis</option>
           <option value="valor_fixo">Valor fixo</option>
           <option value="valor_fixo_adicional">Acréscimo de valor fixo</option>
-          <option value="percentual">Acréscimo percentual</option>
+          <option value="percentual">Acréscimo percentual (sobre o frete)</option>
+          <option value="percentual_valor_declarado">Gris / Ad Valorem (% sobre o valor do pedido)</option>
           <option value="acrescimo_prazo">Acréscimo de prazo</option>
         </select>
 
@@ -75,6 +76,11 @@
         <div id="action-percentual" style="display:none">
           <label for="percentual">Percentual (%) — use negativo pra desconto</label>
           <input type="number" id="percentual" step="0.1" />
+        </div>
+        <div id="action-percentualValorDeclarado" style="display:none">
+          <label for="percentualValorDeclarado">Percentual sobre o valor do pedido (%)</label>
+          <p class="hint" style="margin-top:-8px">Ex: Gris e Ad Valorem — incidem sobre o valor declarado da mercadoria, não sobre o preço do frete.</p>
+          <input type="number" id="percentualValorDeclarado" step="0.01" min="0" />
         </div>
         <div id="action-days" style="display:none">
           <label for="days">Dias adicionais</label>
@@ -152,6 +158,7 @@
       valor_fixo: ["fixedPrice"],
       valor_fixo_adicional: ["additionalPrice"],
       percentual: ["percentual"],
+      percentual_valor_declarado: ["percentualValorDeclarado"],
       acrescimo_prazo: ["days"],
     };
 
@@ -160,6 +167,7 @@
       valor_fixo: "Valor fixo",
       valor_fixo_adicional: "Acréscimo de valor",
       percentual: "Acréscimo percentual",
+      percentual_valor_declarado: "Gris / Ad Valorem",
       acrescimo_prazo: "Acréscimo de prazo",
     };
 
@@ -193,12 +201,10 @@
     geoModeSelect.addEventListener("change", updateGeoFields);
 
     function updateActionFields() {
-      Object.keys(ACTION_FIELDS).forEach((type) => {
-        document.querySelectorAll(`[id^="action-"]`).forEach((el) => (el.style.display = "none"));
-      });
+      document.querySelectorAll(`[id^="action-"]`).forEach((el) => (el.style.display = "none"));
       const fields = ACTION_FIELDS[typeSelect.value] || [];
       fields.forEach((f) => {
-        const box = document.getElementById(`action-${f === "fixedPrice" ? "fixedPrice" : f === "additionalPrice" ? "additionalPrice" : f === "percentual" ? "percentual" : "days"}`);
+        const box = document.getElementById(`action-${f}`);
         if (box) box.style.display = "block";
       });
     }
@@ -226,7 +232,9 @@
         case "valor_fixo_adicional":
           return `${a.additionalPriceCents >= 0 ? "+" : ""}${money(a.additionalPriceCents ?? 0)}`;
         case "percentual":
-          return `${a.percentual >= 0 ? "+" : ""}${a.percentual ?? 0}%`;
+          return `${a.percentual >= 0 ? "+" : ""}${a.percentual ?? 0}% no frete`;
+        case "percentual_valor_declarado":
+          return `+${a.percentualValorDeclarado ?? 0}% sobre o valor do pedido`;
         case "acrescimo_prazo":
           return `+${a.additionalDays ?? 0} dia(s)`;
         default:
@@ -299,6 +307,7 @@
       document.getElementById("fixedPrice").value = a.fixedPriceCents != null ? a.fixedPriceCents / 100 : "";
       document.getElementById("additionalPrice").value = a.additionalPriceCents != null ? a.additionalPriceCents / 100 : "";
       document.getElementById("percentual").value = a.percentual ?? "";
+      document.getElementById("percentualValorDeclarado").value = a.percentualValorDeclarado ?? "";
       document.getElementById("days").value = a.additionalDays ?? "";
 
       const c = rule.condition || {};
@@ -370,6 +379,10 @@
           additionalPriceCents:
             typeSelect.value === "valor_fixo_adicional" ? toCents(document.getElementById("additionalPrice").value) : undefined,
           percentual: typeSelect.value === "percentual" ? toNum(document.getElementById("percentual").value) : undefined,
+          percentualValorDeclarado:
+            typeSelect.value === "percentual_valor_declarado"
+              ? toNum(document.getElementById("percentualValorDeclarado").value)
+              : undefined,
           additionalDays: typeSelect.value === "acrescimo_prazo" ? toNum(document.getElementById("days").value) : undefined,
         },
         priority: Number(document.getElementById("priority").value),

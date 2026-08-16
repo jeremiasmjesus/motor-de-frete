@@ -10,7 +10,14 @@ function describeZodError(error: z.ZodError): string {
 
 const ruleBody = z.object({
   title: z.string().min(1, "informe um título"),
-  type: z.enum(["valor_fixo", "valor_fixo_adicional", "percentual", "frete_gratis", "acrescimo_prazo"]),
+  type: z.enum([
+    "valor_fixo",
+    "valor_fixo_adicional",
+    "percentual",
+    "percentual_valor_declarado",
+    "frete_gratis",
+    "acrescimo_prazo",
+  ]),
   carrierCode: z.string().nullable(),
   condition: z.object({
     cartValueMinCents: z.number().int().nonnegative().optional(),
@@ -24,6 +31,7 @@ const ruleBody = z.object({
     fixedPriceCents: z.number().int().nonnegative().optional(),
     additionalPriceCents: z.number().int().optional(),
     percentual: z.number().optional(),
+    percentualValorDeclarado: z.number().optional(),
     additionalDays: z.number().int().optional(),
   }),
   priority: z.number().int(),

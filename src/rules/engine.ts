@@ -32,7 +32,7 @@ function conditionMatches(rule: Rule, carrierCode: string, ctx: QuoteContext, no
   return true;
 }
 
-function applyAction(quote: BaseQuote, rule: Rule): BaseQuote {
+function applyAction(quote: BaseQuote, rule: Rule, ctx: QuoteContext): BaseQuote {
   const a = rule.action;
   switch (rule.type) {
     case "valor_fixo":
@@ -44,6 +44,11 @@ function applyAction(quote: BaseQuote, rule: Rule): BaseQuote {
         ...quote,
         priceCents: Math.round(quote.priceCents * (1 + (a.percentual ?? 0) / 100)),
       };
+    case "percentual_valor_declarado": {
+      // Gris, Ad Valorem etc — incide sobre o valor do pedido, não sobre o preço do frete.
+      const taxa = Math.round(ctx.cartValueCents * ((a.percentualValorDeclarado ?? 0) / 100));
+      return { ...quote, priceCents: quote.priceCents + taxa };
+    }
     case "acrescimo_prazo":
       return { ...quote, deadlineDays: quote.deadlineDays + (a.additionalDays ?? 0) };
     default:
@@ -68,7 +73,7 @@ export function applyRules(
     .filter((r) => r.active && r.type !== "frete_gratis" && conditionMatches(r, base.carrierCode, ctx, now))
     .sort((a, b) => a.priority - b.priority);
 
-  return applicable.reduce(applyAction, base);
+  return applicable.reduce((quote, rule) => applyAction(quote, rule, ctx), base);
 }
 
 /**
