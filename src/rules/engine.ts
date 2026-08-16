@@ -1,4 +1,24 @@
 import type { BaseQuote, QuoteContext, Rule } from "../types.js";
+import { ufToRegiao } from "../carriers/regioes.js";
+
+function geoMatches(rule: Rule, ctx: QuoteContext): boolean {
+  const c = rule.condition;
+  switch (c.geoMode) {
+    case undefined:
+      return true; // sem filtro geográfico — aplica em qualquer lugar
+    case "regiao": {
+      const regiao = ufToRegiao(ctx.destinationUf);
+      return regiao !== null && (c.regioes ?? []).includes(regiao);
+    }
+    case "estado":
+      return (c.ufs ?? []).includes(ctx.destinationUf);
+    case "cep":
+      if (!c.cepFrom || !c.cepTo) return true;
+      return ctx.destinationCep >= c.cepFrom && ctx.destinationCep <= c.cepTo;
+    default:
+      return true;
+  }
+}
 
 function conditionMatches(rule: Rule, carrierCode: string, ctx: QuoteContext, now: Date): boolean {
   if (rule.carrierCode !== null && rule.carrierCode !== carrierCode) return false;
@@ -6,9 +26,8 @@ function conditionMatches(rule: Rule, carrierCode: string, ctx: QuoteContext, no
   if (rule.validTo && now > rule.validTo) return false;
 
   const c = rule.condition;
-  if (c.carrierCode && c.carrierCode !== carrierCode) return false;
   if (c.cartValueMinCents !== undefined && ctx.cartValueCents < c.cartValueMinCents) return false;
-  if (c.ufIn && !c.ufIn.includes(ctx.destinationUf)) return false;
+  if (!geoMatches(rule, ctx)) return false;
 
   return true;
 }

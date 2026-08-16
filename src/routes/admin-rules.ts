@@ -14,7 +14,11 @@ const ruleBody = z.object({
   carrierCode: z.string().nullable(),
   condition: z.object({
     cartValueMinCents: z.number().int().nonnegative().optional(),
-    ufIn: z.array(z.string().length(2)).optional(),
+    geoMode: z.enum(["regiao", "estado", "cep"]).optional(),
+    regioes: z.array(z.string()).optional(),
+    ufs: z.array(z.string().length(2)).optional(),
+    cepFrom: z.string().length(8).optional(),
+    cepTo: z.string().length(8).optional(),
   }),
   action: z.object({
     fixedPriceCents: z.number().int().nonnegative().optional(),

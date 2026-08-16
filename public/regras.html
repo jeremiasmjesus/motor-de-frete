@@ -82,14 +82,38 @@
         </div>
 
         <h3 style="margin-top:26px">Condição (deixe em branco pra aplicar sempre)</h3>
-        <div class="row">
-          <div>
-            <label for="cart-min">Valor mínimo do carrinho (R$)</label>
-            <input type="number" id="cart-min" step="0.01" min="0" />
-          </div>
-          <div>
-            <label for="uf-in">UFs (separadas por vírgula)</label>
-            <input type="text" id="uf-in" placeholder="SP, RJ, MG" />
+
+        <label for="cart-min">Valor mínimo do carrinho (R$)</label>
+        <p class="hint" style="margin-top:-8px">O valor final, já com desconto/promoção aplicada — não o subtotal bruto dos itens.</p>
+        <input type="number" id="cart-min" step="0.01" min="0" />
+
+        <label for="geo-mode">Filtro geográfico</label>
+        <select id="geo-mode">
+          <option value="">Sem filtro — aplica em qualquer lugar</option>
+          <option value="regiao">Por região</option>
+          <option value="estado">Por estado</option>
+          <option value="cep">Por faixa de CEP</option>
+        </select>
+
+        <div id="geo-regiao" style="display:none;margin-top:6px">
+          <div class="row" id="regiao-checkboxes"></div>
+        </div>
+
+        <div id="geo-estado" style="display:none">
+          <label for="geo-ufs">Estados (UF separadas por vírgula)</label>
+          <input type="text" id="geo-ufs" placeholder="SP, RJ, MG" />
+        </div>
+
+        <div id="geo-cep" style="display:none">
+          <div class="row">
+            <div>
+              <label for="geo-cep-from">CEP de</label>
+              <input type="text" id="geo-cep-from" placeholder="00000000" />
+            </div>
+            <div>
+              <label for="geo-cep-to">CEP até</label>
+              <input type="text" id="geo-cep-to" placeholder="99999999" />
+            </div>
           </div>
         </div>
 
@@ -139,14 +163,34 @@
       acrescimo_prazo: "Acréscimo de prazo",
     };
 
+    const REGIOES = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"];
+
     const carrierSelect = document.getElementById("carrier");
     const typeSelect = document.getElementById("type");
+    const geoModeSelect = document.getElementById("geo-mode");
     const form = document.getElementById("rule-form");
     const formTitle = document.getElementById("form-title");
     const cancelBtn = document.getElementById("cancel-edit");
     const rulesBody = document.getElementById("rules-body");
 
     let carriersByCode = {};
+
+    document.getElementById("regiao-checkboxes").innerHTML = REGIOES.map(
+      (r) => `
+        <div class="checkbox-row" style="flex:0 1 auto">
+          <input type="checkbox" class="regiao-cb" value="${r}" id="regiao-${r}" />
+          <label for="regiao-${r}">${r}</label>
+        </div>`,
+    ).join("");
+
+    function updateGeoFields() {
+      ["geo-regiao", "geo-estado", "geo-cep"].forEach((id) => (document.getElementById(id).style.display = "none"));
+      const mode = geoModeSelect.value;
+      if (mode === "regiao") document.getElementById("geo-regiao").style.display = "block";
+      if (mode === "estado") document.getElementById("geo-estado").style.display = "block";
+      if (mode === "cep") document.getElementById("geo-cep").style.display = "block";
+    }
+    geoModeSelect.addEventListener("change", updateGeoFields);
 
     function updateActionFields() {
       Object.keys(ACTION_FIELDS).forEach((type) => {
@@ -194,7 +238,9 @@
       const c = rule.condition || {};
       const parts = [];
       if (c.cartValueMinCents) parts.push(`carrinho ≥ ${money(c.cartValueMinCents)}`);
-      if (c.ufIn && c.ufIn.length) parts.push(`UF ∈ ${c.ufIn.join(", ")}`);
+      if (c.geoMode === "regiao" && c.regioes?.length) parts.push(`região ∈ ${c.regioes.join(", ")}`);
+      if (c.geoMode === "estado" && c.ufs?.length) parts.push(`UF ∈ ${c.ufs.join(", ")}`);
+      if (c.geoMode === "cep" && c.cepFrom && c.cepTo) parts.push(`CEP ${c.cepFrom}–${c.cepTo}`);
       return parts.length ? parts.join(" · ") : "sempre";
     }
 
@@ -257,7 +303,13 @@
 
       const c = rule.condition || {};
       document.getElementById("cart-min").value = c.cartValueMinCents != null ? c.cartValueMinCents / 100 : "";
-      document.getElementById("uf-in").value = c.ufIn ? c.ufIn.join(", ") : "";
+
+      geoModeSelect.value = c.geoMode || "";
+      document.querySelectorAll(".regiao-cb").forEach((cb) => (cb.checked = (c.regioes || []).includes(cb.value)));
+      document.getElementById("geo-ufs").value = c.ufs ? c.ufs.join(", ") : "";
+      document.getElementById("geo-cep-from").value = c.cepFrom || "";
+      document.getElementById("geo-cep-to").value = c.cepTo || "";
+      updateGeoFields();
 
       document.getElementById("valid-from").value = rule.validFrom ? rule.validFrom.slice(0, 10) : "";
       document.getElementById("valid-to").value = rule.validTo ? rule.validTo.slice(0, 10) : "";
@@ -274,6 +326,7 @@
       formTitle.textContent = "Nova regra";
       cancelBtn.style.display = "none";
       updateActionFields();
+      updateGeoFields();
     }
     cancelBtn.addEventListener("click", resetForm);
 
@@ -292,8 +345,10 @@
       const toCents = (v) => (v === "" || v === null ? undefined : Math.round(Number(v) * 100));
       const toNum = (v) => (v === "" || v === null ? undefined : Number(v));
 
-      const ufIn = document
-        .getElementById("uf-in")
+      const geoMode = geoModeSelect.value || undefined;
+      const regioesSelecionadas = Array.from(document.querySelectorAll(".regiao-cb:checked")).map((cb) => cb.value);
+      const ufsDigitadas = document
+        .getElementById("geo-ufs")
         .value.split(",")
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean);
@@ -304,7 +359,11 @@
         carrierCode: carrierSelect.value || null,
         condition: {
           cartValueMinCents: toCents(document.getElementById("cart-min").value),
-          ufIn: ufIn.length ? ufIn : undefined,
+          geoMode,
+          regioes: geoMode === "regiao" && regioesSelecionadas.length ? regioesSelecionadas : undefined,
+          ufs: geoMode === "estado" && ufsDigitadas.length ? ufsDigitadas : undefined,
+          cepFrom: geoMode === "cep" ? document.getElementById("geo-cep-from").value.replace(/\D/g, "") || undefined : undefined,
+          cepTo: geoMode === "cep" ? document.getElementById("geo-cep-to").value.replace(/\D/g, "") || undefined : undefined,
         },
         action: {
           fixedPriceCents: typeSelect.value === "valor_fixo" ? toCents(document.getElementById("fixedPrice").value) : undefined,

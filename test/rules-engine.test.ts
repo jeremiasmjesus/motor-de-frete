@@ -9,7 +9,7 @@ const base: BaseQuote = {
   deadlineDays: 3,
 };
 
-const ctx = { cartValueCents: 35000, destinationUf: "SP" };
+const ctx = { cartValueCents: 35000, destinationUf: "SP", destinationCep: "01310100" };
 
 function rule(overrides: Partial<Rule>): Rule {
   return {
@@ -46,13 +46,13 @@ describe("applyRules", () => {
     expect(applyRules(base, rules, ctx).priceCents).toBe(2789); // 2490 * 1.12 arredondado
   });
 
-  it("frete grátis condicional zera o preço quando a condição bate", () => {
+  it("frete grátis condicional zera o preço quando o valor final do carrinho bate", () => {
     const rules = [
       rule({ type: "percentual", priority: 0, action: { percentual: 10 } }),
       rule({
         type: "frete_gratis",
         priority: 99,
-        condition: { cartValueMinCents: 30000, ufIn: ["SP", "RJ"] },
+        condition: { cartValueMinCents: 30000, geoMode: "estado", ufs: ["SP", "RJ"] },
         action: {},
       }),
     ];
@@ -69,6 +69,34 @@ describe("applyRules", () => {
       }),
     ];
     expect(applyRules(base, rules, { ...ctx, cartValueCents: 5000 }).priceCents).toBe(base.priceCents);
+  });
+
+  it("condição por região bate quando a UF pertence à região selecionada", () => {
+    const rules = [
+      rule({ type: "frete_gratis", condition: { geoMode: "regiao", regioes: ["Sudeste"] } }),
+    ];
+    expect(applyRules(base, rules, { ...ctx, destinationUf: "MG" }).priceCents).toBe(0);
+  });
+
+  it("condição por região não bate fora da região selecionada", () => {
+    const rules = [
+      rule({ type: "frete_gratis", condition: { geoMode: "regiao", regioes: ["Sul"] } }),
+    ];
+    expect(applyRules(base, rules, { ...ctx, destinationUf: "SP" }).priceCents).toBe(base.priceCents);
+  });
+
+  it("condição por faixa de CEP bate quando o CEP de destino está dentro da faixa", () => {
+    const rules = [
+      rule({ type: "frete_gratis", condition: { geoMode: "cep", cepFrom: "01000000", cepTo: "01999999" } }),
+    ];
+    expect(applyRules(base, rules, ctx).priceCents).toBe(0);
+  });
+
+  it("condição por faixa de CEP não bate fora da faixa", () => {
+    const rules = [
+      rule({ type: "frete_gratis", condition: { geoMode: "cep", cepFrom: "02000000", cepTo: "02999999" } }),
+    ];
+    expect(applyRules(base, rules, ctx).priceCents).toBe(base.priceCents);
   });
 
   it("ignora regra inativa", () => {

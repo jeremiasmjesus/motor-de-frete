@@ -8,12 +8,22 @@ import { cepToUf } from "../carriers/cep.js";
 import { applyRules } from "../rules/engine.js";
 import type { BaseQuote, NuvemshopQuoteOption, NuvemshopQuoteRequest } from "../types.js";
 
+// Contrato real da Nuvemshop: https://tiendanube.github.io/api-documentation/resources/shipping-carrier
 const requestSchema = z.object({
-  cart: z.object({ currency: z.string(), subtotal: z.number() }),
-  origin: z.object({ zipcode: z.string() }),
-  destination: z.object({ zipcode: z.string() }),
-  items: z.array(z.object({ quantity: z.number(), grams: z.number() })),
+  cart_id: z.string(),
+  store_id: z.number(),
+  currency: z.string(),
+  total_price: z.number(),
+  origin: z.object({ postal_code: z.string() }),
+  destination: z.object({ postal_code: z.string() }),
+  items: z.array(z.object({ id: z.number(), quantity: z.number(), grams: z.number(), price: z.number() })),
 });
+
+function toIsoDeadline(daysFromNow: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + daysFromNow);
+  return date.toISOString();
+}
 
 export default async function quoteRoutes(app: FastifyInstance) {
   app.post("/quote", async (request, reply) => {
@@ -24,8 +34,10 @@ export default async function quoteRoutes(app: FastifyInstance) {
     const body = parsed.data as NuvemshopQuoteRequest;
 
     const totalGrams = body.items.reduce((sum, item) => sum + item.grams * item.quantity, 0);
-    const cartValueCents = Math.round(body.cart.subtotal * 100);
-    const destinationUf = cepToUf(body.destination.zipcode);
+    // total_price já é o valor final do carrinho (com desconto aplicado) — não o subtotal bruto.
+    const cartValueCents = Math.round(body.total_price * 100);
+    const destinationCep = body.destination.postal_code.replace(/\D/g, "").padStart(8, "0");
+    const destinationUf = cepToUf(destinationCep);
 
     const [carriers, rules] = await Promise.all([listActiveCarriers(), listActiveRules()]);
 
@@ -37,8 +49,8 @@ export default async function quoteRoutes(app: FastifyInstance) {
       try {
         if (carrier.priceSource === "api") {
           const result = await getCorreiosQuote({
-            cepOrigem: body.origin.zipcode,
-            cepDestino: body.destination.zipcode,
+            cepOrigem: body.origin.postal_code.replace(/\D/g, "").padStart(8, "0"),
+            cepDestino: destinationCep,
             pesoGramas: totalGrams,
           });
           base = {
@@ -50,8 +62,8 @@ export default async function quoteRoutes(app: FastifyInstance) {
         } else {
           const result =
             carrier.pricingModel === "zone"
-              ? await getZoneTableQuote(carrier.id, body.destination.zipcode, totalGrams)
-              : await getFlatTableQuote(carrier.id, body.destination.zipcode, totalGrams);
+              ? await getZoneTableQuote(carrier.id, destinationCep, totalGrams)
+              : await getFlatTableQuote(carrier.id, destinationCep, totalGrams);
           if (result) {
             base = {
               carrierCode: carrier.code,
@@ -71,19 +83,21 @@ export default async function quoteRoutes(app: FastifyInstance) {
       const adjusted = applyRules(base, rules, {
         cartValueCents,
         destinationUf: destinationUf ?? "",
+        destinationCep,
       });
 
       options.push({
         name: adjusted.carrierName,
         code: adjusted.carrierCode,
         price: adjusted.priceCents / 100,
-        currency: body.cart.currency,
-        min_delivery_date: adjusted.deadlineDays,
-        max_delivery_date: adjusted.deadlineDays + 1,
+        currency: body.currency,
+        type: "ship",
+        min_delivery_date: toIsoDeadline(adjusted.deadlineDays),
+        max_delivery_date: toIsoDeadline(adjusted.deadlineDays + 1),
       });
     }
 
     options.sort((a, b) => a.price - b.price);
-    return options;
+    return reply.send({ rates: options });
   });
 }

@@ -32,10 +32,16 @@ export type RuleType =
   | "frete_gratis"
   | "acrescimo_prazo";
 
+export type GeoFilterMode = "regiao" | "estado" | "cep";
+
 export interface RuleCondition {
+  /** Valor final do carrinho, já com desconto — não o subtotal bruto dos itens. */
   cartValueMinCents?: number;
-  ufIn?: string[];
-  carrierCode?: string;
+  geoMode?: GeoFilterMode;
+  regioes?: string[]; // usado quando geoMode === 'regiao', ex: ['Sudeste', 'Sul']
+  ufs?: string[]; // usado quando geoMode === 'estado', ex: ['SP', 'RJ']
+  cepFrom?: string; // usado quando geoMode === 'cep'
+  cepTo?: string;
 }
 
 export interface RuleAction {
@@ -59,23 +65,33 @@ export interface Rule {
 }
 
 export interface QuoteContext {
+  /** Valor final do carrinho, já com desconto aplicado. */
   cartValueCents: number;
   destinationUf: string;
+  destinationCep: string;
 }
 
-// Contrato de request/response da Nuvemshop Shipping Carrier API
+// Contrato de request/response da Nuvemshop Shipping Carrier API.
+// Referência: https://tiendanube.github.io/api-documentation/resources/shipping-carrier
 export interface NuvemshopQuoteRequest {
-  cart: { currency: string; subtotal: number };
-  origin: { zipcode: string };
-  destination: { zipcode: string };
-  items: { quantity: number; grams: number }[];
+  cart_id: string;
+  store_id: number;
+  currency: string;
+  /** Valor final do carrinho — já reflete descontos/promoções aplicados, não é o subtotal bruto. */
+  total_price: number;
+  origin: { postal_code: string };
+  destination: { postal_code: string };
+  items: { id: number; quantity: number; grams: number; price: number; free_shipping?: boolean }[];
 }
 
 export interface NuvemshopQuoteOption {
   name: string;
   code: string;
   price: number;
+  price_merchant?: number;
   currency: string;
-  min_delivery_date: number;
-  max_delivery_date: number;
+  type: "ship" | "pickup";
+  /** ISO 8601 — não é número de dias. */
+  min_delivery_date: string;
+  max_delivery_date: string;
 }
