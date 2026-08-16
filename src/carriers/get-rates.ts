@@ -1,6 +1,6 @@
 import { listActiveCarriers } from "../db/carriers.js";
 import { listActiveRules } from "../db/rules.js";
-import { getCorreiosQuote } from "./correios/client.js";
+import { getCorreiosDeadline, getCorreiosQuote } from "./correios/client.js";
 import { getFlatTableQuote, getZoneTableQuote } from "./table/lookup.js";
 import { cepToUf } from "./cep.js";
 import { applyFreeShipping, applyRules } from "../rules/engine.js";
@@ -37,17 +37,25 @@ export async function getRates(req: RateRequest): Promise<BaseQuote[]> {
 
     try {
       if (carrier.priceSource === "api") {
-        const result = await getCorreiosQuote({
-          cepOrigem: req.originCep,
-          cepDestino: req.destinationCep,
-          pesoGramas: req.totalGrams,
-          dimensoes: req.dimensoes,
-        });
+        const [priceResult, deadlineResult] = await Promise.all([
+          getCorreiosQuote({
+            cepOrigem: req.originCep,
+            cepDestino: req.destinationCep,
+            pesoGramas: req.totalGrams,
+            dimensoes: req.dimensoes,
+          }),
+          getCorreiosDeadline({ cepOrigem: req.originCep, cepDestino: req.destinationCep }).catch((err) => {
+            // a API Prazo exige um serviço à parte no contrato — se não estiver liberada,
+            // cai num prazo padrão em vez de derrubar a cotação inteira dos Correios.
+            console.error("[get-rates] falha ao consultar prazo dos Correios:", err instanceof Error ? err.message : err);
+            return null;
+          }),
+        ]);
         base = {
           carrierCode: carrier.code,
           carrierName: carrier.name,
-          priceCents: result.precoCentavos,
-          deadlineDays: 3, // TODO: complementar com a API Prazo dos Correios
+          priceCents: priceResult.precoCentavos,
+          deadlineDays: deadlineResult?.prazoDias ?? 3,
         };
       } else {
         const result =

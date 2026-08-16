@@ -2,6 +2,7 @@ import { loadCorreiosCredentials } from "./credentials.js";
 
 const TOKEN_URL = "https://api.correios.com.br/token/v1/autentica/cartaopostagem";
 const PRICE_URL = "https://api.correios.com.br/preco/v1/nacional";
+const DEADLINE_URL = "https://api.correios.com.br/prazo/v1/nacional";
 
 export const CORREIOS_SERVICE_CODES = {
   SEDEX: "03220",
@@ -103,6 +104,41 @@ export async function getCorreiosQuote(params: CorreiosQuoteParams): Promise<Cor
     precoCentavos: Math.round(parseFloat(data.pcFinal.replace(",", ".")) * 100),
     pesoTaxadoGramas: parseFloat(data.psCobrado.replace(",", ".")),
   };
+}
+
+export interface CorreiosDeadlineParams {
+  cepOrigem: string;
+  cepDestino: string;
+  coProduto?: string;
+}
+
+export interface CorreiosDeadlineResult {
+  prazoDias: number;
+}
+
+/**
+ * API Prazo dos Correios — separada da API Preço, precisa do serviço
+ * "38210 - API Prazos" vinculado ao contrato. Se não estiver liberado,
+ * quem chama deve cair num prazo padrão em vez de derrubar a cotação.
+ */
+export async function getCorreiosDeadline(params: CorreiosDeadlineParams): Promise<CorreiosDeadlineResult> {
+  const token = await getToken();
+  const coProduto = params.coProduto ?? CORREIOS_SERVICE_CODES.SEDEX;
+
+  const url = new URL(`${DEADLINE_URL}/${coProduto}`);
+  url.searchParams.set("cepOrigem", params.cepOrigem);
+  url.searchParams.set("cepDestino", params.cepDestino);
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Falha ao consultar prazo nos Correios: ${res.status} ${await res.text()}`);
+  }
+
+  const data = (await res.json()) as { prazoEntrega: number };
+  return { prazoDias: data.prazoEntrega };
 }
 
 export interface CorreiosTestResult {
