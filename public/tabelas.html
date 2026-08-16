@@ -9,7 +9,7 @@
 <body>
   <main>
     <h1>Tabelas de frete</h1>
-    <p class="lede">Loggi e J&amp;T Express funcionam por tabela — suba a planilha (.csv ou .xlsx) com as faixas de preço. Cada linha precisa ter as colunas <code>cep_from, cep_to, weight_from_g, weight_to_g, price, deadline_days</code>. A planilha é validada inteira antes de gravar: se alguma linha tiver erro, nada é importado.</p>
+    <p class="lede">Loggi e J&amp;T Express funcionam por zona: cada faixa de CEP cai numa praça (ex: "SP CAP"), e o preço depende da praça e do peso. Suba os arquivos originais da transportadora — a extração da zona, CEP e preço é automática.</p>
 
     <div class="card">
       <h2>Subir tabela</h2>
@@ -18,14 +18,22 @@
         <select id="carrier" required>
           <option value="">Carregando…</option>
         </select>
-        <label for="file">Planilha (.csv ou .xlsx)</label>
-        <input type="file" id="file" accept=".csv,.xlsx" required />
+
+        <div id="loggi-fields">
+          <label for="loggi-file">Arquivo da Loggi (.xlsx — "price agreement", já traz preço e abrangência)</label>
+          <input type="file" id="loggi-file" accept=".xlsx" />
+        </div>
+
+        <div id="jt-fields" style="display:none">
+          <label for="jt-abrangencia">Arquivo de abrangência/prazos (.xlsx)</label>
+          <input type="file" id="jt-abrangencia" accept=".xlsx" />
+          <label for="jt-proposta">Arquivo de proposta comercial/preços (.xlsx)</label>
+          <input type="file" id="jt-proposta" accept=".xlsx" />
+        </div>
+
         <button class="primary" type="submit">Enviar e validar</button>
         <div class="message" id="upload-msg"></div>
-        <table class="errors" id="error-table" style="display:none">
-          <thead><tr><th>Linha</th><th>Problema</th></tr></thead>
-          <tbody id="error-body"></tbody>
-        </table>
+        <div id="unmatched-box" style="display:none;margin-top:10px;font-size:12.5px;color:var(--warn)"></div>
       </form>
     </div>
   </main>
@@ -37,6 +45,14 @@
     renderSidebar("tabelas");
 
     const carrierSelect = document.getElementById("carrier");
+    const loggiFields = document.getElementById("loggi-fields");
+    const jtFields = document.getElementById("jt-fields");
+
+    function toggleFields() {
+      const isJt = carrierSelect.value === "jt-express";
+      loggiFields.style.display = isJt ? "none" : "block";
+      jtFields.style.display = isJt ? "block" : "none";
+    }
 
     async function loadCarriers() {
       const res = await authFetch("/admin/carriers");
@@ -44,29 +60,43 @@
       carrierSelect.innerHTML = carriers
         .map((c) => `<option value="${c.code}">${c.name}</option>`)
         .join("");
+      toggleFields();
     }
+
+    carrierSelect.addEventListener("change", toggleFields);
 
     document.getElementById("upload-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = e.target.querySelector("button");
       const msg = document.getElementById("upload-msg");
-      const errorTable = document.getElementById("error-table");
-      const errorBody = document.getElementById("error-body");
-      errorTable.style.display = "none";
-      errorBody.innerHTML = "";
+      const unmatchedBox = document.getElementById("unmatched-box");
+      unmatchedBox.style.display = "none";
 
-      const fileInput = document.getElementById("file");
-      const file = fileInput.files[0];
-      if (!file) return;
-
+      const code = carrierSelect.value;
       const formData = new FormData();
-      formData.append("file", file);
+
+      if (code === "jt-express") {
+        const abrangencia = document.getElementById("jt-abrangencia").files[0];
+        const proposta = document.getElementById("jt-proposta").files[0];
+        if (!abrangencia || !proposta) {
+          showMessage(msg, "Selecione os dois arquivos da J&T.", "bad");
+          return;
+        }
+        formData.append("abrangencia", abrangencia);
+        formData.append("proposta", proposta);
+      } else {
+        const file = document.getElementById("loggi-file").files[0];
+        if (!file) {
+          showMessage(msg, "Selecione o arquivo da Loggi.", "bad");
+          return;
+        }
+        formData.append("file", file);
+      }
 
       btn.disabled = true;
-      showMessage(msg, "Validando planilha…", "ok");
+      showMessage(msg, "Processando planilha (pode levar um pouco pra tabelas grandes)…", "ok");
 
       try {
-        const code = carrierSelect.value;
         const res = await authFetch(`/admin/carriers/${code}/rate-table`, {
           method: "POST",
           body: formData,
@@ -75,17 +105,14 @@
 
         if (!res.ok) {
           showMessage(msg, data.error || "Falha ao importar.", "bad");
-          if (data.rowErrors) {
-            errorTable.style.display = "table";
-            errorBody.innerHTML = data.rowErrors
-              .map((e) => `<tr><td class="row-num">${e.row}</td><td>${e.message}</td></tr>`)
-              .join("");
-          }
           return;
         }
 
         showMessage(msg, data.message, "ok");
-        fileInput.value = "";
+        if (data.unmatchedZones && data.unmatchedZones.length > 0) {
+          unmatchedBox.style.display = "block";
+          unmatchedBox.textContent = `Aviso: ${data.unmatchedZones.length} zona(s) de CEP não têm preço correspondente e serão ignoradas nessas regiões: ${data.unmatchedZones.slice(0, 15).join(", ")}${data.unmatchedZones.length > 15 ? "…" : ""}`;
+        }
       } finally {
         btn.disabled = false;
       }

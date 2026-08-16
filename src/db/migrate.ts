@@ -25,13 +25,11 @@ async function run() {
     if (applied.has(file)) continue;
     const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
     console.log(`Aplicando migração: ${file}`);
-    await pool.query("begin");
     try {
-      await pool.query(sql);
+      await pool.exec(sql);
       await pool.query("insert into schema_migrations (name) values ($1)", [file]);
-      await pool.query("commit");
     } catch (err) {
-      await pool.query("rollback");
+      console.error(`Falha aplicando ${file} — corrija e rode de novo (migrations já aplicadas não serão repetidas).`);
       throw err;
     }
   }

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { listActiveCarriers } from "../db/carriers.js";
 import { listActiveRules } from "../db/rules.js";
 import { getCorreiosQuote } from "../carriers/correios/client.js";
-import { getTableQuote } from "../carriers/table/lookup.js";
+import { getFlatTableQuote, getZoneTableQuote } from "../carriers/table/lookup.js";
 import { cepToUf } from "../carriers/cep.js";
 import { applyRules } from "../rules/engine.js";
 import type { BaseQuote, NuvemshopQuoteOption, NuvemshopQuoteRequest } from "../types.js";
@@ -48,7 +48,10 @@ export default async function quoteRoutes(app: FastifyInstance) {
             deadlineDays: 3, // TODO: complementar com a API Prazo dos Correios
           };
         } else {
-          const result = await getTableQuote(carrier.id, body.destination.zipcode, totalGrams);
+          const result =
+            carrier.pricingModel === "zone"
+              ? await getZoneTableQuote(carrier.id, body.destination.zipcode, totalGrams)
+              : await getFlatTableQuote(carrier.id, body.destination.zipcode, totalGrams);
           if (result) {
             base = {
               carrierCode: carrier.code,

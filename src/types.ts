@@ -7,12 +7,14 @@ export interface AuthUser {
 }
 
 export type PriceSource = "api" | "table";
+export type PricingModel = "flat" | "zone";
 
 export interface Carrier {
   id: string;
   name: string;
   code: string;
   priceSource: PriceSource;
+  pricingModel: PricingModel;
   active: boolean;
 }
 

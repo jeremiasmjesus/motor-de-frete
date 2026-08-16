@@ -57,7 +57,7 @@ export async function importRateTable(params: {
   buffer: Buffer;
   uploadedBy: string;
 }): Promise<ImportRateTableResult> {
-  const rawRows = parseTableFile(params.buffer, params.filename);
+  const rawRows = await parseTableFile(params.buffer, params.filename);
   const { valid, errors } = validateRows(rawRows);
 
   if (errors.length > 0) {

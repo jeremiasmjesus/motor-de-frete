@@ -1,4 +1,4 @@
-create extension if not exists pgcrypto;
+-- gen_random_uuid() é nativo do Postgres desde a versão 13, não precisa de extensão.
 
 create type user_role as enum ('admin', 'operador');
 
