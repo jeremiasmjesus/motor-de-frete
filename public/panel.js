@@ -45,10 +45,12 @@ export async function authFetch(path, options = {}) {
 
 export function renderSidebar(activePage) {
   const user = getUser();
+  const isAdmin = user?.role === "admin";
   const links = [
     { href: "/painel/regras.html", label: "Regras de frete", page: "regras" },
-    { href: "/painel/correios.html", label: "Correios (API)", page: "correios" },
     { href: "/painel/tabelas.html", label: "Tabelas (Loggi / J&T)", page: "tabelas" },
+    ...(isAdmin ? [{ href: "/painel/correios.html", label: "Correios (API)", page: "correios" }] : []),
+    ...(isAdmin ? [{ href: "/painel/usuarios.html", label: "Usuários", page: "usuarios" }] : []),
   ];
 
   const nav = document.createElement("nav");
