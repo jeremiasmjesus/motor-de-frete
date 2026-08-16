@@ -4,6 +4,10 @@ import { getCorreiosCredentialsStatus, saveCorreiosCredentials } from "../carrie
 import { invalidateCorreiosTokenCache, testCorreiosCredentials } from "../carriers/correios/client.js";
 import type { AuthUser } from "../types.js";
 
+function describeZodError(error: z.ZodError): string {
+  return error.issues.map((issue) => `${String(issue.path[0] ?? "campo")}: ${issue.message}`).join(" · ");
+}
+
 const credentialsBody = z.object({
   user: z.string().min(1, "informe o usuário (geralmente o CNPJ cadastrado no CWS)"),
   codigoAcesso: z.string().min(1, "informe o código de acesso gerado no CWS"),
@@ -24,7 +28,7 @@ export default async function adminCorreiosRoutes(app: FastifyInstance) {
   app.put("/admin/correios/credentials", { preHandler: app.requireRole("admin") }, async (request, reply) => {
     const parsed = credentialsBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Credenciais inválidas.", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: `Credenciais inválidas — ${describeZodError(parsed.error)}` });
     }
 
     const user = request.user as AuthUser;
@@ -37,7 +41,7 @@ export default async function adminCorreiosRoutes(app: FastifyInstance) {
   app.post("/admin/correios/credentials/test", { preHandler: app.requireRole("admin") }, async (request, reply) => {
     const parsed = testBody.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: "Parâmetros de teste inválidos.", details: parsed.error.flatten() });
+      return reply.code(400).send({ error: `Parâmetros de teste inválidos — ${describeZodError(parsed.error)}` });
     }
 
     const result = await testCorreiosCredentials(parsed.data);
