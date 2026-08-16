@@ -62,6 +62,8 @@ export interface CorreiosQuoteParams {
   cepDestino: string;
   pesoGramas: number;
   coProduto?: string;
+  /** Dimensões em cm — quando informadas, os Correios calculam pelo maior entre peso real e peso cubado. */
+  dimensoes?: { comprimento: number; largura: number; altura: number };
 }
 
 export interface CorreiosQuoteResult {
@@ -78,6 +80,13 @@ export async function getCorreiosQuote(params: CorreiosQuoteParams): Promise<Cor
   url.searchParams.set("cepOrigem", params.cepOrigem);
   url.searchParams.set("cepDestino", params.cepDestino);
   url.searchParams.set("psObjeto", String(params.pesoGramas));
+
+  if (params.dimensoes) {
+    url.searchParams.set("tpObjeto", "2"); // pacote — habilita o cálculo por dimensões
+    url.searchParams.set("comprimento", String(params.dimensoes.comprimento));
+    url.searchParams.set("largura", String(params.dimensoes.largura));
+    url.searchParams.set("altura", String(params.dimensoes.altura));
+  }
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },

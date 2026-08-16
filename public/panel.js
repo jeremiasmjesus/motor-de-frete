@@ -47,6 +47,7 @@ export function renderSidebar(activePage) {
   const user = getUser();
   const isAdmin = user?.role === "admin";
   const links = [
+    { href: "/painel/cotacao.html", label: "Cotação manual", page: "cotacao" },
     { href: "/painel/regras.html", label: "Regras de frete", page: "regras" },
     { href: "/painel/tabelas.html", label: "Tabelas (Loggi / J&T)", page: "tabelas" },
     ...(isAdmin ? [{ href: "/painel/correios.html", label: "Correios (API)", page: "correios" }] : []),

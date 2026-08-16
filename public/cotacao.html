@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Cotação manual — Motor de Frete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/painel/panel.css" />
+</head>
+<body>
+  <main>
+    <h1>Cotação manual</h1>
+    <p class="lede">Pra saber o preço do frete sem passar pelo checkout — útil pra responder um cliente na hora. Preenche as dimensões e o CEP de destino, aplica as mesmas regras e tabelas do checkout de verdade.</p>
+
+    <div class="card">
+      <form id="quote-form">
+        <div class="row">
+          <div>
+            <label for="comprimento">Comprimento (cm)</label>
+            <input type="number" id="comprimento" step="0.1" min="0.1" required />
+          </div>
+          <div>
+            <label for="largura">Largura (cm)</label>
+            <input type="number" id="largura" step="0.1" min="0.1" required />
+          </div>
+          <div>
+            <label for="altura">Altura (cm)</label>
+            <input type="number" id="altura" step="0.1" min="0.1" required />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label for="peso">Peso (kg)</label>
+            <input type="number" id="peso" step="0.01" min="0.01" required />
+          </div>
+          <div>
+            <label for="valor">Valor do pedido (R$)</label>
+            <input type="number" id="valor" step="0.01" min="0" required />
+          </div>
+        </div>
+        <label for="cep">CEP de destino</label>
+        <input type="text" id="cep" placeholder="00000000" required />
+
+        <button class="primary" type="submit">Calcular frete</button>
+        <div class="message" id="form-msg"></div>
+      </form>
+    </div>
+
+    <div class="card" id="results-card" style="display:none">
+      <h2>Resultado</h2>
+      <table class="data-table" id="results-table">
+        <thead>
+          <tr>
+            <th>Transportadora</th>
+            <th>Preço</th>
+            <th>Prazo</th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script type="module">
+    import { authFetch, renderSidebar, requireAuth, showMessage } from "/painel/panel.js";
+
+    requireAuth();
+    renderSidebar("cotacao");
+
+    function money(cents) {
+      return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+
+    document.getElementById("quote-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("form-msg");
+      const resultsCard = document.getElementById("results-card");
+      const resultsBody = document.getElementById("results-body");
+      const btn = e.target.querySelector("button");
+      btn.disabled = true;
+      resultsCard.style.display = "none";
+
+      try {
+        const res = await authFetch("/admin/quote-manual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            comprimento: Number(document.getElementById("comprimento").value),
+            largura: Number(document.getElementById("largura").value),
+            altura: Number(document.getElementById("altura").value),
+            pesoKg: Number(document.getElementById("peso").value),
+            valor: Number(document.getElementById("valor").value),
+            cepDestino: document.getElementById("cep").value.replace(/\D/g, ""),
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(msg, data.error || "Falha ao calcular o frete.", "bad");
+          return;
+        }
+
+        if (data.length === 0) {
+          showMessage(msg, "Nenhuma transportadora atende esse CEP com os dados informados.", "bad");
+          return;
+        }
+
+        msg.className = "message";
+        resultsBody.innerHTML = data
+          .map(
+            (r) => `
+          <tr>
+            <td>${r.carrierName}</td>
+            <td>${r.priceCents === 0 ? '<span class="status ok">grátis</span>' : money(r.priceCents)}</td>
+            <td>${r.deadlineDays} dia(s) útil(eis)</td>
+          </tr>`,
+          )
+          .join("");
+        resultsCard.style.display = "block";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
