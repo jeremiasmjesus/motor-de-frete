@@ -7,6 +7,12 @@ type Row = unknown[];
  * Lê o arquivo "loggi-price-agreement-*.xlsx" que a própria Loggi manda —
  * aba "Tabela de Abrangência" (CEP -> zona + prazo) e "Tabela de Preços"
  * (zona x faixa de peso -> preço).
+ *
+ * Nota: o leitor em fluxo do exceljs (usado na J&T, cuja planilha é bem
+ * maior) não consegue ler o zip desse arquivo específico da Loggi — mesmo
+ * tipo de formatação não-padrão que já tinha quebrado a lib `xlsx` antes.
+ * Carregamento normal funciona e, pro tamanho desse arquivo, cabe na
+ * memória sem problema (medido abaixo do limite do container).
  */
 export async function parseLoggiWorkbook(buffer: Buffer): Promise<ParsedZoneTable> {
   const workbook = await loadWorkbook(buffer);

@@ -1,5 +1,5 @@
 import { cepDigits, normalizeZoneCode, type ParsedZoneTable, type ZonePriceRow, type ZoneRow } from "./types.js";
-import { loadWorkbook, sheetToRows } from "./xlsx-utils.js";
+import { loadWorkbook, sheetToRows, streamSheetToRows } from "./xlsx-utils.js";
 
 type Row = unknown[];
 
@@ -16,15 +16,14 @@ export async function parseJtExpressWorkbooks(
   propostaBuffer: Buffer,
   originCode: string,
 ): Promise<ParsedZoneTable> {
-  const abrangenciaWb = await loadWorkbook(abrangenciaBuffer);
+  // "CEP" tem dezenas de milhares de linhas — lida em fluxo pra não estourar
+  // memória (carregada normal, chega a passar de 1GB de RAM só nessa aba).
+  const cepRows = await streamSheetToRows(abrangenciaBuffer, "CEP");
+  const zones = parseCep(cepRows, originCode);
+
   const propostaWb = await loadWorkbook(propostaBuffer);
-
-  const cepSheet = abrangenciaWb.getWorksheet("CEP");
   const propostaSheet = propostaWb.getWorksheet("Proposta padrão");
-  if (!cepSheet) throw new Error('Não encontrei a aba "CEP" no arquivo de abrangência da J&T.');
   if (!propostaSheet) throw new Error('Não encontrei a aba "Proposta padrão" no arquivo de proposta da J&T.');
-
-  const zones = parseCep(sheetToRows(cepSheet), originCode);
   const prices = parseProposta(sheetToRows(propostaSheet));
 
   return { zones, prices };
