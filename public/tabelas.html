@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Tabelas — Motor de Frete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/painel/panel.css" />
+</head>
+<body>
+  <main>
+    <h1>Tabelas de frete</h1>
+    <p class="lede">Loggi e J&amp;T Express funcionam por tabela — suba a planilha (.csv ou .xlsx) com as faixas de preço. Cada linha precisa ter as colunas <code>cep_from, cep_to, weight_from_g, weight_to_g, price, deadline_days</code>. A planilha é validada inteira antes de gravar: se alguma linha tiver erro, nada é importado.</p>
+
+    <div class="card">
+      <h2>Subir tabela</h2>
+      <form id="upload-form">
+        <label for="carrier">Transportadora</label>
+        <select id="carrier" required>
+          <option value="">Carregando…</option>
+        </select>
+        <label for="file">Planilha (.csv ou .xlsx)</label>
+        <input type="file" id="file" accept=".csv,.xlsx" required />
+        <button class="primary" type="submit">Enviar e validar</button>
+        <div class="message" id="upload-msg"></div>
+        <table class="errors" id="error-table" style="display:none">
+          <thead><tr><th>Linha</th><th>Problema</th></tr></thead>
+          <tbody id="error-body"></tbody>
+        </table>
+      </form>
+    </div>
+  </main>
+
+  <script type="module">
+    import { authFetch, renderSidebar, requireAuth, showMessage } from "/painel/panel.js";
+
+    requireAuth();
+    renderSidebar("tabelas");
+
+    const carrierSelect = document.getElementById("carrier");
+
+    async function loadCarriers() {
+      const res = await authFetch("/admin/carriers");
+      const carriers = await res.json();
+      carrierSelect.innerHTML = carriers
+        .map((c) => `<option value="${c.code}">${c.name}</option>`)
+        .join("");
+    }
+
+    document.getElementById("upload-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector("button");
+      const msg = document.getElementById("upload-msg");
+      const errorTable = document.getElementById("error-table");
+      const errorBody = document.getElementById("error-body");
+      errorTable.style.display = "none";
+      errorBody.innerHTML = "";
+
+      const fileInput = document.getElementById("file");
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      btn.disabled = true;
+      showMessage(msg, "Validando planilha…", "ok");
+
+      try {
+        const code = carrierSelect.value;
+        const res = await authFetch(`/admin/carriers/${code}/rate-table`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(msg, data.error || "Falha ao importar.", "bad");
+          if (data.rowErrors) {
+            errorTable.style.display = "table";
+            errorBody.innerHTML = data.rowErrors
+              .map((e) => `<tr><td class="row-num">${e.row}</td><td>${e.message}</td></tr>`)
+              .join("");
+          }
+          return;
+        }
+
+        showMessage(msg, data.message, "ok");
+        fileInput.value = "";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    loadCarriers();
+  </script>
+</body>
+</html>

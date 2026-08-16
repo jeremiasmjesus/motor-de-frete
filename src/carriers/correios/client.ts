@@ -1,3 +1,5 @@
+import { loadCorreiosCredentials } from "./credentials.js";
+
 const TOKEN_URL = "https://api.correios.com.br/token/v1/autentica/cartaopostagem";
 const PRICE_URL = "https://api.correios.com.br/preco/v1/nacional";
 
@@ -13,16 +15,18 @@ interface TokenResponse {
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
-async function fetchToken(): Promise<string> {
-  const user = process.env.CORREIOS_USER;
-  const password = process.env.CORREIOS_PASSWORD;
-  const cartaoPostagem = process.env.CORREIOS_CARTAO_POSTAGEM;
+/** Chamar sempre que as credenciais forem alteradas pelo painel, pra não usar um token velho. */
+export function invalidateCorreiosTokenCache(): void {
+  cachedToken = null;
+}
 
-  if (!user || !password || !cartaoPostagem) {
-    throw new Error("Credenciais dos Correios ausentes (CORREIOS_USER / CORREIOS_PASSWORD / CORREIOS_CARTAO_POSTAGEM).");
+async function fetchToken(): Promise<string> {
+  const creds = await loadCorreiosCredentials();
+  if (!creds) {
+    throw new Error("Credenciais dos Correios não configuradas. Cadastre-as no painel antes de cotar.");
   }
 
-  const basic = Buffer.from(`${user}:${password}`).toString("base64");
+  const basic = Buffer.from(`${creds.user}:${creds.password}`).toString("base64");
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",
@@ -30,7 +34,7 @@ async function fetchToken(): Promise<string> {
       Authorization: `Basic ${basic}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ numero: cartaoPostagem }),
+    body: JSON.stringify({ numero: creds.cartaoPostagem }),
   });
 
   if (!res.ok) {
@@ -90,4 +94,33 @@ export async function getCorreiosQuote(params: CorreiosQuoteParams): Promise<Cor
     precoCentavos: Math.round(parseFloat(data.pcFinal.replace(",", ".")) * 100),
     pesoTaxadoGramas: parseFloat(data.psCobrado.replace(",", ".")),
   };
+}
+
+export interface CorreiosTestResult {
+  ok: boolean;
+  message: string;
+  sample?: { precoCentavos: number };
+}
+
+/**
+ * Testa as credenciais salvas fazendo o fluxo completo: autentica e faz uma
+ * cotação real de amostra. Autenticar sozinho não garante que o cartão de
+ * postagem está corretamente vinculado ao contrato — só a cotação confirma isso.
+ */
+export async function testCorreiosCredentials(params: {
+  cepOrigem: string;
+  cepDestino: string;
+  pesoGramas: number;
+}): Promise<CorreiosTestResult> {
+  invalidateCorreiosTokenCache();
+  try {
+    const result = await getCorreiosQuote(params);
+    return {
+      ok: true,
+      message: "Conexão validada — autenticação e cotação de teste funcionaram.",
+      sample: { precoCentavos: result.precoCentavos },
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Erro desconhecido ao testar." };
+  }
 }

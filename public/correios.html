@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Correios — Motor de Frete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/painel/panel.css" />
+</head>
+<body>
+  <main>
+    <h1>Credenciais dos Correios</h1>
+    <p class="lede">Essas são as mesmas credenciais do Meu Correios / CWS que vocês já usam hoje — usuário, senha e número do cartão de postagem. Atualize aqui sempre que precisar trocar, sem depender de deploy.</p>
+
+    <div class="card">
+      <h2>Status atual</h2>
+      <p class="hint">O que está salvo agora (a senha nunca é exibida de volta).</p>
+      <div id="status-box">Carregando…</div>
+    </div>
+
+    <div class="card">
+      <h2>Atualizar credenciais</h2>
+      <p class="hint">Salvar aqui não testa a conexão automaticamente — use o teste abaixo depois de salvar.</p>
+      <form id="creds-form">
+        <label for="user">Usuário (Meu Correios)</label>
+        <input type="text" id="user" required />
+        <label for="password">Senha</label>
+        <input type="password" id="password" required autocomplete="new-password" />
+        <label for="cartao">Cartão de postagem</label>
+        <input type="text" id="cartao" required />
+        <button class="primary" type="submit">Salvar credenciais</button>
+        <div class="message" id="save-msg"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Testar conexão</h2>
+      <p class="hint">Faz uma cotação de verdade com as credenciais salvas — confirma que autenticação e contrato estão certos, não só que a senha está correta.</p>
+      <form id="test-form">
+        <div class="row">
+          <div>
+            <label for="cep-origem">CEP de origem</label>
+            <input type="text" id="cep-origem" placeholder="00000000" required />
+          </div>
+          <div>
+            <label for="cep-destino">CEP de destino</label>
+            <input type="text" id="cep-destino" placeholder="00000000" required />
+          </div>
+          <div>
+            <label for="peso">Peso (gramas)</label>
+            <input type="number" id="peso" value="300" required />
+          </div>
+        </div>
+        <button class="secondary" type="submit">Testar conexão</button>
+        <div class="message" id="test-msg"></div>
+      </form>
+    </div>
+  </main>
+
+  <script type="module">
+    import { authFetch, renderSidebar, requireAuth, showMessage } from "/painel/panel.js";
+
+    requireAuth();
+    renderSidebar("correios");
+
+    const statusBox = document.getElementById("status-box");
+
+    async function loadStatus() {
+      const res = await authFetch("/admin/correios/credentials");
+      const data = await res.json();
+
+      if (!data.configured) {
+        statusBox.innerHTML = `<span class="status warn">não configurado</span>`;
+        return;
+      }
+
+      const updated = new Date(data.updatedAt).toLocaleString("pt-BR");
+      statusBox.innerHTML = `
+        <span class="status ok">configurado</span>
+        <p style="margin:10px 0 0;font-size:13.5px;color:var(--ink-soft)">
+          usuário <strong>${data.user}</strong> · cartão ${data.cartaoPostagemMasked}<br/>
+          atualizado em ${updated}
+        </p>
+      `;
+    }
+
+    document.getElementById("creds-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector("button");
+      const msg = document.getElementById("save-msg");
+      btn.disabled = true;
+
+      try {
+        const res = await authFetch("/admin/correios/credentials", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user: document.getElementById("user").value,
+            password: document.getElementById("password").value,
+            cartaoPostagem: document.getElementById("cartao").value,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(msg, data.error || "Não foi possível salvar.", "bad");
+          return;
+        }
+
+        showMessage(msg, "Credenciais salvas. Use o teste abaixo pra confirmar que funcionam.", "ok");
+        e.target.reset();
+        loadStatus();
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    document.getElementById("test-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = e.target.querySelector("button");
+      const msg = document.getElementById("test-msg");
+      btn.disabled = true;
+      showMessage(msg, "Testando…", "ok");
+
+      try {
+        const res = await authFetch("/admin/correios/credentials/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cepOrigem: document.getElementById("cep-origem").value.replace(/\D/g, ""),
+            cepDestino: document.getElementById("cep-destino").value.replace(/\D/g, ""),
+            pesoGramas: Number(document.getElementById("peso").value),
+          }),
+        });
+        const data = await res.json();
+
+        if (!data.ok) {
+          showMessage(msg, data.message || data.error || "Falha no teste.", "bad");
+          return;
+        }
+
+        const preco = (data.sample.precoCentavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        showMessage(msg, `${data.message} Preço de amostra: ${preco}.`, "ok");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    loadStatus();
+  </script>
+</body>
+</html>

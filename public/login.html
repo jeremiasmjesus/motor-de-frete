@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Entrar — Motor de Frete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/painel/panel.css" />
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <form class="login-card" id="login-form">
+      <h1>Motor de Frete</h1>
+      <p>Entre com sua conta pra gerenciar credenciais e tabelas.</p>
+      <label for="email">E-mail</label>
+      <input type="email" id="email" required autocomplete="username" />
+      <label for="password">Senha</label>
+      <input type="password" id="password" required autocomplete="current-password" />
+      <button class="primary" type="submit" style="width:100%">Entrar</button>
+      <div class="message" id="msg"></div>
+    </form>
+  </div>
+
+  <script type="module">
+    import { setSession, showMessage } from "/painel/panel.js";
+
+    const form = document.getElementById("login-form");
+    const msg = document.getElementById("msg");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      const btn = form.querySelector("button");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(msg, data.error || "Não foi possível entrar.", "bad");
+          return;
+        }
+
+        setSession(data.token, data.user);
+        window.location.href = "/painel/correios.html";
+      } catch {
+        showMessage(msg, "Erro de conexão. Tente de novo.", "bad");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
