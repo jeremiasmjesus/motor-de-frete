@@ -17,3 +17,8 @@ export async function findUserByEmail(email: string): Promise<UserRow | null> {
   );
   return rows[0] ?? null;
 }
+
+export async function userExistsAndActive(id: string): Promise<boolean> {
+  const { rows } = await pool.query<{ id: string }>("select id from users where id = $1 and active = true", [id]);
+  return rows.length > 0;
+}

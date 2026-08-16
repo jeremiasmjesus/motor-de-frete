@@ -2,6 +2,7 @@ import fp from "fastify-plugin";
 import jwt from "@fastify/jwt";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuthUser, UserRole } from "../types.js";
+import { userExistsAndActive } from "../db/users.js";
 
 declare module "@fastify/jwt" {
   interface FastifyJWT {
@@ -27,6 +28,15 @@ export default fp(async (app: FastifyInstance) => {
       await request.jwtVerify();
     } catch {
       reply.code(401).send({ error: "Não autenticado." });
+      return;
+    }
+
+    // O token pode estar assinado corretamente mas apontar pra um usuário que
+    // não existe mais (ex: banco recriado, conta removida) — sem essa checagem,
+    // isso passa direto e só quebra mais adiante com um erro de FK confuso.
+    const user = request.user as AuthUser;
+    if (!(await userExistsAndActive(user.id))) {
+      reply.code(401).send({ error: "Sessão inválida — faça login novamente." });
     }
   });
 
