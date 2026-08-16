@@ -70,6 +70,10 @@
       return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     }
 
+    function deadlineLabel(days) {
+      return `Chega em ${days}-${days + 1} dias úteis`;
+    }
+
     document.getElementById("quote-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const msg = document.getElementById("form-msg");
@@ -115,7 +119,7 @@
                 ? `<span class="status ok">grátis</span>${r.originalPriceCents ? ` <span style="color:var(--ink-faint);font-size:12px">(cliente pagaria ${money(r.originalPriceCents)})</span>` : ""}`
                 : money(r.priceCents)
             }</td>
-            <td>${r.deadlineDays} dia(s) útil(eis)</td>
+            <td>${deadlineLabel(r.deadlineDays)}</td>
           </tr>`,
           )
           .join("");
