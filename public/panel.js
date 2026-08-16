@@ -46,6 +46,7 @@ export async function authFetch(path, options = {}) {
 export function renderSidebar(activePage) {
   const user = getUser();
   const links = [
+    { href: "/painel/regras.html", label: "Regras de frete", page: "regras" },
     { href: "/painel/correios.html", label: "Correios (API)", page: "correios" },
     { href: "/painel/tabelas.html", label: "Tabelas (Loggi / J&T)", page: "tabelas" },
   ];

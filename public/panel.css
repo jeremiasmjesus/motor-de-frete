@@ -99,6 +99,7 @@ main {
   padding: 40px 44px;
   max-width: 720px;
 }
+main.wide { max-width: 1080px; }
 main h1 { font-size: 22px; margin: 0 0 6px; }
 main p.lede { color: var(--ink-soft); font-size: 14px; margin: 0 0 28px; max-width: 60ch; }
 
@@ -172,6 +173,22 @@ table.errors { width: 100%; border-collapse: collapse; font-size: 13px; margin-t
 table.errors th, table.errors td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); }
 table.errors th { color: var(--ink-faint); font-size: 11px; text-transform: uppercase; }
 table.errors td.row-num { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; color: var(--ink-faint); }
+
+table.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.data-table th, table.data-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.data-table th { color: var(--ink-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+table.data-table tbody tr:hover { background: var(--surface-2); }
+table.data-table td.actions { white-space: nowrap; text-align: right; }
+
+.link-btn {
+  background: none; border: none; padding: 0; margin-left: 12px;
+  color: var(--accent); font-size: 13px; cursor: pointer; text-decoration: underline;
+}
+.link-btn.danger { color: var(--bad); }
+
+.checkbox-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.checkbox-row input { width: auto; margin: 0; }
+.checkbox-row label { margin: 0; }
 
 .field-error { color: var(--bad); font-size: 12px; margin: -10px 0 12px; }
 

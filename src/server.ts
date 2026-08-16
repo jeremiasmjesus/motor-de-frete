@@ -10,6 +10,7 @@ import quoteRoutes from "./routes/quote.js";
 import userRoutes from "./routes/users.js";
 import adminCorreiosRoutes from "./routes/admin-correios.js";
 import adminTableRoutes from "./routes/admin-tables.js";
+import adminRulesRoutes from "./routes/admin-rules.js";
 import { pool } from "./db/client.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,6 +24,7 @@ await app.register(quoteRoutes);
 await app.register(userRoutes);
 await app.register(adminCorreiosRoutes);
 await app.register(adminTableRoutes);
+await app.register(adminRulesRoutes);
 
 await app.register(fastifyStatic, {
   root: join(__dirname, "..", "public"),

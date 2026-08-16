@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Regras de frete — Motor de Frete</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/painel/panel.css" />
+</head>
+<body>
+  <main class="wide">
+    <h1>Regras de frete</h1>
+    <p class="lede">Frete grátis, markup por transportadora, frete fixo por período, acréscimo de prazo — tudo aqui, sem precisar mexer em código. As regras rodam em ordem de prioridade (menor primeiro) sobre o preço que vem da tabela ou da API.</p>
+
+    <div class="card">
+      <h2>Regras cadastradas</h2>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="rules-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Título</th>
+              <th>Ação</th>
+              <th>Transportadora</th>
+              <th>Condição</th>
+              <th>Prioridade</th>
+              <th>Vigência</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rules-body">
+            <tr><td colspan="8">Carregando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="form-title">Nova regra</h2>
+      <form id="rule-form">
+        <input type="hidden" id="rule-id" />
+
+        <label for="title">Título</label>
+        <input type="text" id="title" placeholder="ex: Frete grátis acima de R$ 300 no Sudeste" required />
+
+        <div class="row">
+          <div>
+            <label for="carrier">Transportadora</label>
+            <select id="carrier">
+              <option value="">Todas</option>
+            </select>
+          </div>
+          <div>
+            <label for="priority">Prioridade (menor roda primeiro)</label>
+            <input type="number" id="priority" value="0" required />
+          </div>
+        </div>
+
+        <label for="type">Tipo de ação</label>
+        <select id="type" required>
+          <option value="frete_gratis">Frete grátis</option>
+          <option value="valor_fixo">Valor fixo</option>
+          <option value="valor_fixo_adicional">Acréscimo de valor fixo</option>
+          <option value="percentual">Acréscimo percentual</option>
+          <option value="acrescimo_prazo">Acréscimo de prazo</option>
+        </select>
+
+        <div id="action-fixedPrice" style="display:none">
+          <label for="fixedPrice">Preço fixo (R$)</label>
+          <input type="number" id="fixedPrice" step="0.01" min="0" />
+        </div>
+        <div id="action-additionalPrice" style="display:none">
+          <label for="additionalPrice">Valor adicional (R$ — use negativo pra desconto)</label>
+          <input type="number" id="additionalPrice" step="0.01" />
+        </div>
+        <div id="action-percentual" style="display:none">
+          <label for="percentual">Percentual (%) — use negativo pra desconto</label>
+          <input type="number" id="percentual" step="0.1" />
+        </div>
+        <div id="action-days" style="display:none">
+          <label for="days">Dias adicionais</label>
+          <input type="number" id="days" step="1" />
+        </div>
+
+        <h3 style="margin-top:26px">Condição (deixe em branco pra aplicar sempre)</h3>
+        <div class="row">
+          <div>
+            <label for="cart-min">Valor mínimo do carrinho (R$)</label>
+            <input type="number" id="cart-min" step="0.01" min="0" />
+          </div>
+          <div>
+            <label for="uf-in">UFs (separadas por vírgula)</label>
+            <input type="text" id="uf-in" placeholder="SP, RJ, MG" />
+          </div>
+        </div>
+
+        <h3 style="margin-top:26px">Vigência (opcional — em branco = sempre ativa dentro do período)</h3>
+        <div class="row">
+          <div>
+            <label for="valid-from">Válida a partir de</label>
+            <input type="date" id="valid-from" />
+          </div>
+          <div>
+            <label for="valid-to">Válida até</label>
+            <input type="date" id="valid-to" />
+          </div>
+        </div>
+
+        <div class="checkbox-row" style="margin-top:18px">
+          <input type="checkbox" id="active" checked />
+          <label for="active">Ativa</label>
+        </div>
+
+        <button class="primary" type="submit">Salvar regra</button>
+        <button class="secondary" type="button" id="cancel-edit" style="display:none">Cancelar edição</button>
+        <div class="message" id="form-msg"></div>
+      </form>
+    </div>
+  </main>
+
+  <script type="module">
+    import { authFetch, renderSidebar, requireAuth, showMessage } from "/painel/panel.js";
+
+    requireAuth();
+    renderSidebar("regras");
+
+    const ACTION_FIELDS = {
+      frete_gratis: [],
+      valor_fixo: ["fixedPrice"],
+      valor_fixo_adicional: ["additionalPrice"],
+      percentual: ["percentual"],
+      acrescimo_prazo: ["days"],
+    };
+
+    const TYPE_LABEL = {
+      frete_gratis: "Frete grátis",
+      valor_fixo: "Valor fixo",
+      valor_fixo_adicional: "Acréscimo de valor",
+      percentual: "Acréscimo percentual",
+      acrescimo_prazo: "Acréscimo de prazo",
+    };
+
+    const carrierSelect = document.getElementById("carrier");
+    const typeSelect = document.getElementById("type");
+    const form = document.getElementById("rule-form");
+    const formTitle = document.getElementById("form-title");
+    const cancelBtn = document.getElementById("cancel-edit");
+    const rulesBody = document.getElementById("rules-body");
+
+    let carriersByCode = {};
+
+    function updateActionFields() {
+      Object.keys(ACTION_FIELDS).forEach((type) => {
+        document.querySelectorAll(`[id^="action-"]`).forEach((el) => (el.style.display = "none"));
+      });
+      const fields = ACTION_FIELDS[typeSelect.value] || [];
+      fields.forEach((f) => {
+        const box = document.getElementById(`action-${f === "fixedPrice" ? "fixedPrice" : f === "additionalPrice" ? "additionalPrice" : f === "percentual" ? "percentual" : "days"}`);
+        if (box) box.style.display = "block";
+      });
+    }
+    typeSelect.addEventListener("change", updateActionFields);
+
+    async function loadCarriers() {
+      const res = await authFetch("/admin/carriers/all");
+      const carriers = await res.json();
+      carriersByCode = Object.fromEntries(carriers.map((c) => [c.code, c]));
+      carrierSelect.innerHTML =
+        `<option value="">Todas</option>` + carriers.map((c) => `<option value="${c.code}">${c.name}</option>`).join("");
+    }
+
+    function money(cents) {
+      return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    }
+
+    function describeAction(rule) {
+      const a = rule.action;
+      switch (rule.type) {
+        case "frete_gratis":
+          return "Frete grátis";
+        case "valor_fixo":
+          return `Preço fixo: ${money(a.fixedPriceCents ?? 0)}`;
+        case "valor_fixo_adicional":
+          return `${a.additionalPriceCents >= 0 ? "+" : ""}${money(a.additionalPriceCents ?? 0)}`;
+        case "percentual":
+          return `${a.percentual >= 0 ? "+" : ""}${a.percentual ?? 0}%`;
+        case "acrescimo_prazo":
+          return `+${a.additionalDays ?? 0} dia(s)`;
+        default:
+          return TYPE_LABEL[rule.type] || rule.type;
+      }
+    }
+
+    function describeCondition(rule) {
+      const c = rule.condition || {};
+      const parts = [];
+      if (c.cartValueMinCents) parts.push(`carrinho ≥ ${money(c.cartValueMinCents)}`);
+      if (c.ufIn && c.ufIn.length) parts.push(`UF ∈ ${c.ufIn.join(", ")}`);
+      return parts.length ? parts.join(" · ") : "sempre";
+    }
+
+    function describeVigencia(rule) {
+      if (!rule.validFrom && !rule.validTo) return "permanente";
+      const from = rule.validFrom ? new Date(rule.validFrom).toLocaleDateString("pt-BR") : "…";
+      const to = rule.validTo ? new Date(rule.validTo).toLocaleDateString("pt-BR") : "…";
+      return `${from} – ${to}`;
+    }
+
+    async function loadRules() {
+      const res = await authFetch("/admin/rules");
+      const rules = await res.json();
+
+      if (rules.length === 0) {
+        rulesBody.innerHTML = `<tr><td colspan="8" style="color:var(--ink-faint)">Nenhuma regra cadastrada ainda.</td></tr>`;
+        return;
+      }
+
+      rulesBody.innerHTML = rules
+        .map(
+          (r) => `
+        <tr>
+          <td><span class="status ${r.active ? "ok" : "warn"}">${r.active ? "ativa" : "inativa"}</span></td>
+          <td>${r.title}</td>
+          <td>${describeAction(r)}</td>
+          <td>${r.carrierCode ? (carriersByCode[r.carrierCode]?.name ?? r.carrierCode) : "Todas"}</td>
+          <td>${describeCondition(r)}</td>
+          <td class="mono">${r.priority}</td>
+          <td>${describeVigencia(r)}</td>
+          <td class="actions">
+            <button class="link-btn" data-edit="${r.id}">editar</button>
+            <button class="link-btn danger" data-delete="${r.id}">excluir</button>
+          </td>
+        </tr>`,
+        )
+        .join("");
+
+      rulesBody.querySelectorAll("[data-edit]").forEach((btn) => {
+        btn.addEventListener("click", () => startEdit(rules.find((r) => r.id === btn.dataset.edit)));
+      });
+      rulesBody.querySelectorAll("[data-delete]").forEach((btn) => {
+        btn.addEventListener("click", () => deleteRule(btn.dataset.delete));
+      });
+    }
+
+    function startEdit(rule) {
+      document.getElementById("rule-id").value = rule.id;
+      document.getElementById("title").value = rule.title;
+      carrierSelect.value = rule.carrierCode || "";
+      document.getElementById("priority").value = rule.priority;
+      typeSelect.value = rule.type;
+      updateActionFields();
+
+      const a = rule.action || {};
+      document.getElementById("fixedPrice").value = a.fixedPriceCents != null ? a.fixedPriceCents / 100 : "";
+      document.getElementById("additionalPrice").value = a.additionalPriceCents != null ? a.additionalPriceCents / 100 : "";
+      document.getElementById("percentual").value = a.percentual ?? "";
+      document.getElementById("days").value = a.additionalDays ?? "";
+
+      const c = rule.condition || {};
+      document.getElementById("cart-min").value = c.cartValueMinCents != null ? c.cartValueMinCents / 100 : "";
+      document.getElementById("uf-in").value = c.ufIn ? c.ufIn.join(", ") : "";
+
+      document.getElementById("valid-from").value = rule.validFrom ? rule.validFrom.slice(0, 10) : "";
+      document.getElementById("valid-to").value = rule.validTo ? rule.validTo.slice(0, 10) : "";
+      document.getElementById("active").checked = rule.active;
+
+      formTitle.textContent = `Editando: ${rule.title}`;
+      cancelBtn.style.display = "inline-block";
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }
+
+    function resetForm() {
+      form.reset();
+      document.getElementById("rule-id").value = "";
+      formTitle.textContent = "Nova regra";
+      cancelBtn.style.display = "none";
+      updateActionFields();
+    }
+    cancelBtn.addEventListener("click", resetForm);
+
+    async function deleteRule(id) {
+      if (!confirm("Excluir esta regra? Não dá pra desfazer.")) return;
+      await authFetch(`/admin/rules/${id}`, { method: "DELETE" });
+      loadRules();
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById("form-msg");
+      const btn = form.querySelector('button[type="submit"]');
+      btn.disabled = true;
+
+      const toCents = (v) => (v === "" || v === null ? undefined : Math.round(Number(v) * 100));
+      const toNum = (v) => (v === "" || v === null ? undefined : Number(v));
+
+      const ufIn = document
+        .getElementById("uf-in")
+        .value.split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+      const payload = {
+        title: document.getElementById("title").value,
+        type: typeSelect.value,
+        carrierCode: carrierSelect.value || null,
+        condition: {
+          cartValueMinCents: toCents(document.getElementById("cart-min").value),
+          ufIn: ufIn.length ? ufIn : undefined,
+        },
+        action: {
+          fixedPriceCents: typeSelect.value === "valor_fixo" ? toCents(document.getElementById("fixedPrice").value) : undefined,
+          additionalPriceCents:
+            typeSelect.value === "valor_fixo_adicional" ? toCents(document.getElementById("additionalPrice").value) : undefined,
+          percentual: typeSelect.value === "percentual" ? toNum(document.getElementById("percentual").value) : undefined,
+          additionalDays: typeSelect.value === "acrescimo_prazo" ? toNum(document.getElementById("days").value) : undefined,
+        },
+        priority: Number(document.getElementById("priority").value),
+        active: document.getElementById("active").checked,
+        validFrom: document.getElementById("valid-from").value || null,
+        validTo: document.getElementById("valid-to").value || null,
+      };
+
+      const id = document.getElementById("rule-id").value;
+      const url = id ? `/admin/rules/${id}` : "/admin/rules";
+      const method = id ? "PUT" : "POST";
+
+      try {
+        const res = await authFetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showMessage(msg, data.error || "Falha ao salvar regra.", "bad");
+          return;
+        }
+
+        showMessage(msg, "Regra salva.", "ok");
+        resetForm();
+        loadRules();
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    updateActionFields();
+    loadCarriers().then(loadRules);
+  </script>
+</body>
+</html>
