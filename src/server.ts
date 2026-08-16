@@ -12,11 +12,13 @@ import adminCorreiosRoutes from "./routes/admin-correios.js";
 import adminTableRoutes from "./routes/admin-tables.js";
 import adminRulesRoutes from "./routes/admin-rules.js";
 import adminQuoteRoutes from "./routes/admin-quote.js";
+import nuvemshopOAuthRoutes from "./routes/nuvemshop-oauth.js";
 import { pool, usePglite } from "./db/client.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const app = Fastify({ logger: true });
+// necessário atrás do proxy do Railway pra req.protocol/hostname refletirem a URL pública real
+const app = Fastify({ logger: true, trustProxy: true });
 
 await app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
 await app.register(authPlugin);
@@ -27,6 +29,7 @@ await app.register(adminCorreiosRoutes);
 await app.register(adminTableRoutes);
 await app.register(adminRulesRoutes);
 await app.register(adminQuoteRoutes);
+await app.register(nuvemshopOAuthRoutes);
 
 await app.register(fastifyStatic, {
   root: join(__dirname, "..", "public"),
