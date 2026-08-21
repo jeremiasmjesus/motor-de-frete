@@ -71,6 +71,39 @@ export async function createShippingCarrier(
 export interface ShippingCarrierOptionInput {
   code: string;
   name: string;
+  /**
+   * Prazo padrão (em dias) usado como estimativa de base pelo tema do
+   * checkout — o prazo exato de cada cotação continua vindo dinâmico via
+   * min_delivery_date/max_delivery_date em cada resposta do /quote.
+   */
+  additionalDays?: number;
+}
+
+interface ExistingOption {
+  id: number;
+  code: string;
+}
+
+function authHeaders(accessToken: string) {
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "User-Agent": USER_AGENT,
+  };
+}
+
+async function listShippingCarrierOptions(
+  storeId: string,
+  accessToken: string,
+  carrierId: number,
+): Promise<ExistingOption[]> {
+  const res = await fetch(`${API_BASE}/${storeId}/shipping_carriers/${carrierId}/options`, {
+    headers: authHeaders(accessToken),
+  });
+  if (!res.ok) {
+    throw new Error(`Falha ao listar as opções da transportadora na Nuvemshop: ${res.status} ${await res.text()}`);
+  }
+  return res.json() as Promise<ExistingOption[]>;
 }
 
 /**
@@ -78,6 +111,9 @@ export interface ShippingCarrierOptionInput {
  * "option" cadastrada, e usa o campo `code` da option pra casar com o `code`
  * que a gente devolve em cada rate no /quote. Sem isso, o checkout não pede
  * cotação nenhuma pra transportadora — mesmo com ela "active".
+ *
+ * Idempotente: numa reinstalação, atualiza as options que já existem em vez
+ * de tentar criar de novo (o que daria conflito de code duplicado).
  */
 export async function createShippingCarrierOptions(
   storeId: string,
@@ -85,16 +121,23 @@ export async function createShippingCarrierOptions(
   carrierId: number,
   options: ShippingCarrierOptionInput[],
 ): Promise<void> {
+  const existing = await listShippingCarrierOptions(storeId, accessToken, carrierId);
+
   for (const option of options) {
-    const res = await fetch(`${API_BASE}/${storeId}/shipping_carriers/${carrierId}/options`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "User-Agent": USER_AGENT,
-      },
-      body: JSON.stringify({ code: option.code, name: option.name, active: true }),
+    const found = existing.find((o) => o.code === option.code);
+    const body = JSON.stringify({
+      code: option.code,
+      name: option.name,
+      active: true,
+      ...(option.additionalDays !== undefined ? { additional_days: option.additionalDays } : {}),
     });
+
+    const res = await fetch(
+      found
+        ? `${API_BASE}/${storeId}/shipping_carriers/${carrierId}/options/${found.id}`
+        : `${API_BASE}/${storeId}/shipping_carriers/${carrierId}/options`,
+      { method: found ? "PUT" : "POST", headers: authHeaders(accessToken), body },
+    );
 
     if (!res.ok) {
       throw new Error(
