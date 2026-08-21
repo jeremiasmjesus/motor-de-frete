@@ -48,6 +48,7 @@ export default async function quoteRoutes(app: FastifyInstance) {
       max_delivery_date: toIsoDeadline(r.deadlineDays + 1),
     }));
 
+    request.log.info({ destinationCep, rates: options }, "Cotação respondida pra Nuvemshop");
     return reply.send({ rates: options });
   });
 }

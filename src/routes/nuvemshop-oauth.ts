@@ -22,14 +22,6 @@ function page(title: string, bodyHtml: string): string {
 </html>`;
 }
 
-// Estimativa de base pro tema do checkout exibir enquanto não sabemos se ele
-// usa isso ou o min_delivery_date/max_delivery_date dinâmico de cada cotação.
-const DEFAULT_ADDITIONAL_DAYS: Record<string, number> = {
-  correios: 1,
-  "jt-express": 4,
-  loggi: 5,
-};
-
 export default async function nuvemshopOAuthRoutes(app: FastifyInstance) {
   app.get("/nuvemshop/callback", async (request, reply) => {
     const { code } = request.query as { code?: string };
@@ -60,7 +52,7 @@ export default async function nuvemshopOAuthRoutes(app: FastifyInstance) {
         storeId,
         accessToken,
         carrier.id,
-        carriers.map((c) => ({ code: c.code, name: c.name, additionalDays: DEFAULT_ADDITIONAL_DAYS[c.code] })),
+        carriers.map((c) => ({ code: c.code, name: c.name })),
       );
       return reply.type("text/html").send(
         page(

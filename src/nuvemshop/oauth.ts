@@ -40,26 +40,37 @@ export interface ShippingCarrierResult {
   callback_url: string;
 }
 
+const CARRIER_NAME = "Motor de Frete Nalisa";
+
 /** Cadastra (ou atualiza, se já existir) o Motor de Frete como transportadora na loja. */
 export async function createShippingCarrier(
   storeId: string,
   accessToken: string,
   callbackUrl: string,
 ): Promise<ShippingCarrierResult> {
-  const res = await fetch(`${API_BASE}/${storeId}/shipping_carriers`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "User-Agent": USER_AGENT,
-    },
-    body: JSON.stringify({
-      name: "Motor de Frete Nalisa",
-      callback_url: callbackUrl,
-      types: "ship",
-      active: true,
-    }),
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "User-Agent": USER_AGENT,
+  };
+  const body = JSON.stringify({
+    name: CARRIER_NAME,
+    callback_url: callbackUrl,
+    types: "ship",
+    active: true,
   });
+
+  const listRes = await fetch(`${API_BASE}/${storeId}/shipping_carriers`, { headers });
+  if (!listRes.ok) {
+    throw new Error(`Falha ao listar transportadoras na Nuvemshop: ${listRes.status} ${await listRes.text()}`);
+  }
+  const existing = (await listRes.json()) as ShippingCarrierResult[];
+  const found = existing.find((c) => c.name === CARRIER_NAME);
+
+  const res = await fetch(
+    found ? `${API_BASE}/${storeId}/shipping_carriers/${found.id}` : `${API_BASE}/${storeId}/shipping_carriers`,
+    { method: found ? "PUT" : "POST", headers, body },
+  );
 
   if (!res.ok) {
     throw new Error(`Falha ao cadastrar a transportadora na Nuvemshop: ${res.status} ${await res.text()}`);
