@@ -67,3 +67,39 @@ export async function createShippingCarrier(
 
   return res.json() as Promise<ShippingCarrierResult>;
 }
+
+export interface ShippingCarrierOptionInput {
+  code: string;
+  name: string;
+}
+
+/**
+ * A Nuvemshop só chama o callback_url pra transportadoras que têm ao menos uma
+ * "option" cadastrada, e usa o campo `code` da option pra casar com o `code`
+ * que a gente devolve em cada rate no /quote. Sem isso, o checkout não pede
+ * cotação nenhuma pra transportadora — mesmo com ela "active".
+ */
+export async function createShippingCarrierOptions(
+  storeId: string,
+  accessToken: string,
+  carrierId: number,
+  options: ShippingCarrierOptionInput[],
+): Promise<void> {
+  for (const option of options) {
+    const res = await fetch(`${API_BASE}/${storeId}/shipping_carriers/${carrierId}/options`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({ code: option.code, name: option.name, active: true }),
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `Falha ao cadastrar a opção "${option.name}" (${option.code}) na Nuvemshop: ${res.status} ${await res.text()}`,
+      );
+    }
+  }
+}

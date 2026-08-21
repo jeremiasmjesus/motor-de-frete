@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { createShippingCarrier, exchangeCodeForToken } from "../nuvemshop/oauth.js";
+import { createShippingCarrier, createShippingCarrierOptions, exchangeCodeForToken } from "../nuvemshop/oauth.js";
 import { saveNuvemshopInstall } from "../nuvemshop/store.js";
+import { listActiveCarriers } from "../db/carriers.js";
 
 function page(title: string, bodyHtml: string): string {
   return `<!doctype html>
@@ -46,6 +47,13 @@ export default async function nuvemshopOAuthRoutes(app: FastifyInstance) {
 
     try {
       const carrier = await createShippingCarrier(storeId, accessToken, callbackUrl);
+      const carriers = await listActiveCarriers();
+      await createShippingCarrierOptions(
+        storeId,
+        accessToken,
+        carrier.id,
+        carriers.map((c) => ({ code: c.code, name: c.name })),
+      );
       return reply.type("text/html").send(
         page(
           "Instalado!",
@@ -53,6 +61,7 @@ export default async function nuvemshopOAuthRoutes(app: FastifyInstance) {
            <p>Loja: <code>${storeId}</code></p>
            <p>Transportadora: <strong>${carrier.name}</strong> (id ${carrier.id})</p>
            <p>Callback: <code>${carrier.callback_url}</code></p>
+           <p>Opções cadastradas: <code>${carriers.map((c) => c.code).join(", ")}</code></p>
            <p>Já pode fechar essa aba e testar uma cotação no checkout.</p>`,
         ),
       );
